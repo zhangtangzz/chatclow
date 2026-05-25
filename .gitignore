@@ -1,0 +1,39 @@
+# Java
+target/
+*.class
+*.jar
+*.war
+*.ear
+*.iml
+.idea/
+.settings/
+.project
+.classpath
+*.log
+
+# Spring Boot
+uploads/
+
+# Node / Vue
+node_modules/
+dist/
+.vite/
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Env / Secrets
+.env
+.env.local
+.env.*.local
+application-dev.yml
+application-prod.yml
+chatclow_api/src/main/resources/application.yml
+
+# Misc
+unknown
+*.swp
+*.swo
+*~

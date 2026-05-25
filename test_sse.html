@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChatClow SSE 流式测试</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #1a1a2e; color: #eee; min-height: 100vh;
+            display: flex; justify-content: center; align-items: center;
+        }
+        .container {
+            width: 700px; background: #16213e; border-radius: 16px;
+            padding: 30px; box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+        }
+        h1 { color: #e94560; margin-bottom: 8px; font-size: 24px; }
+        .subtitle { color: #888; margin-bottom: 24px; font-size: 13px; }
+        .row { display: flex; gap: 12px; margin-bottom: 12px; }
+        .field { flex: 1; }
+        label { display: block; font-size: 12px; color: #aaa; margin-bottom: 4px; }
+        input, textarea {
+            width: 100%; padding: 10px 12px;
+            background: #0f3460; border: 1px solid #1a1a4e;
+            color: #eee; border-radius: 8px; font-size: 14px;
+        }
+        input:focus, textarea:focus { outline: none; border-color: #e94560; }
+        textarea { height: 60px; resize: vertical; margin-bottom: 12px; }
+        .btn-row { display: flex; gap: 10px; margin-bottom: 20px; }
+        button {
+            padding: 10px 20px; border: none; border-radius: 8px;
+            font-size: 14px; cursor: pointer; font-weight: 600;
+        }
+        .btn-stream { background: #e94560; color: #fff; flex: 2; }
+        .btn-regular { background: #0f3460; color: #4ecdc4; flex: 1; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .output-area {
+            background: #0f3460; border-radius: 12px; padding: 18px;
+            min-height: 150px; max-height: 400px; overflow-y: auto;
+            border: 1px solid #1a1a4e; margin-bottom: 12px;
+        }
+        .msg-user { color: #4ecdc4; margin-bottom: 8px; }
+        .msg-ai { color: #f0e68c; line-height: 1.6; }
+        .label-user { color: #4ecdc4; font-size: 11px; margin-bottom: 4px; }
+        .label-ai { color: #f0e68c; font-size: 11px; margin-bottom: 4px; }
+        .cursor { display: inline-block; width: 8px; height: 16px;
+            background: #e94560; animation: blink 0.6s infinite; vertical-align: middle; }
+        @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+        .status { font-size: 12px; color: #888; margin-top: 6px; }
+        .status.ok { color: #4ecdc4; }
+        .status.err { color: #e94560; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>ChatClow SSE 流式测试</h1>
+    <p class="subtitle">测试 POST /api/chat/send-stream 端点</p>
+
+    <div class="row">
+        <div class="field">
+            <label>智能体ID (agentId) *</label>
+            <input id="agentId" type="number" value="1" placeholder="智能体ID">
+        </div>
+        <div class="field">
+            <label>用户ID (userId) *</label>
+            <input id="userId" type="number" value="1" placeholder="用户ID">
+        </div>
+        <div class="field">
+            <label>会话ID (可选)</label>
+            <input id="conversationId" type="number" placeholder="留空=新建会话">
+        </div>
+    </div>
+
+    <label>消息内容 *</label>
+    <textarea id="message" placeholder="输入你的问题...">你好，请做个自我介绍</textarea>
+
+    <div class="btn-row">
+        <button class="btn-stream" onclick="sendStream()">流式发送 (SSE)</button>
+        <button class="btn-regular" onclick="sendNormal()">普通发送</button>
+    </div>
+
+    <div class="output-area" id="output"></div>
+    <div class="status" id="status">等待输入...</div>
+</div>
+
+<script>
+const BASE = 'http://localhost:8080';
+
+async function sendStream() {
+    const agentId = document.getElementById('agentId').value;
+    const userId = document.getElementById('userId').value;
+    const message = document.getElementById('message').value;
+    const convId = document.getElementById('conversationId').value || null;
+
+    if (!agentId || !userId || !message) {
+        alert('请填写智能体ID、用户ID和消息内容');
+        return;
+    }
+
+    const output = document.getElementById('output');
+    const status = document.getElementById('status');
+    const btn = document.querySelector('.btn-stream');
+
+    // 显示用户消息
+    output.innerHTML = `<div class="msg-user">👤 <b>你:</b> ${escapeHtml(message)}</div>`;
+    output.innerHTML += `<div class="msg-ai">🤖 <b>AI:</b> <span id="stream-content"></span><span class="cursor" id="cursor"></span></div>`;
+    status.textContent = '⏳ 流式接收中...';
+    status.className = 'status';
+    btn.disabled = true;
+
+    try {
+        const response = await fetch(BASE + '/api/chat/send-stream', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                agentId: parseInt(agentId),
+                userId: parseInt(userId),
+                message: message,
+                conversationId: convId ? parseInt(convId) : null
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error('HTTP ' + response.status);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        const contentEl = document.getElementById('stream-content');
+        let fullText = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            // SSE 格式: "data: 内容\n\n"
+            const chunk = decoder.decode(value, { stream: true });
+            const lines = chunk.split('\n');
+            for (const line of lines) {
+                // EventSource 协议: data:payload\n\n
+                if (line.startsWith('data:')) {
+                    const payload = line.substring(5).trim();
+                    if (payload) {
+                        fullText += payload;
+                        contentEl.textContent = fullText;
+                    }
+                }
+            }
+        }
+
+        // 流结束
+        const cursor = document.getElementById('cursor');
+        if (cursor) cursor.remove();
+
+        status.textContent = `✅ 流式完成 | 回复长度: ${fullText.length} 字符`;
+        status.className = 'status ok';
+
+    } catch (err) {
+        status.textContent = `❌ 错误: ${err.message}`;
+        status.className = 'status err';
+        const cursor = document.getElementById('cursor');
+        if (cursor) cursor.remove();
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+async function sendNormal() {
+    const agentId = document.getElementById('agentId').value;
+    const userId = document.getElementById('userId').value;
+    const message = document.getElementById('message').value;
+    const convId = document.getElementById('conversationId').value || null;
+
+    if (!agentId || !userId || !message) {
+        alert('请填写智能体ID、用户ID和消息内容');
+        return;
+    }
+
+    const output = document.getElementById('output');
+    const status = document.getElementById('status');
+    const btn = document.querySelector('.btn-regular');
+
+    output.innerHTML = `<div class="msg-user">👤 <b>你:</b> ${escapeHtml(message)}</div>`;
+    status.textContent = '⏳ 等待回复中...';
+    status.className = 'status';
+    btn.disabled = true;
+
+    const start = Date.now();
+    try {
+        const response = await fetch(BASE + '/api/chat/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                agentId: parseInt(agentId),
+                userId: parseInt(userId),
+                message: message,
+                conversationId: convId ? parseInt(convId) : null
+            })
+        });
+
+        const data = await response.json();
+        const elapsed = ((Date.now() - start) / 1000).toFixed(1);
+
+        output.innerHTML += `<div class="msg-ai">🤖 <b>AI:</b> ${escapeHtml(data.data.reply || data.data)}</div>`;
+        status.textContent = `✅ 普通完成 | 耗时: ${elapsed}秒`;
+        status.className = 'status ok';
+
+    } catch (err) {
+        status.textContent = `❌ 错误: ${err.message}`;
+        status.className = 'status err';
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+</script>
+</body>
+</html>

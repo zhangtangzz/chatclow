@@ -1,0 +1,37 @@
+# ChatClow 应用配置（模板文件，复制为 application.yml 后填入真实值）
+
+server:
+  port: 8080
+
+spring:
+  application:
+    name: chatclow-api
+
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 100MB
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/chatclow?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&useSSL=false
+    username: YOUR_DB_USERNAME
+    password: YOUR_DB_PASSWORD
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  mvc:
+    pathmatch:
+      matching-strategy: ant_path_matcher
+
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.chatclow.**.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+# RAG 向量化配置
+rag:
+  embedding:
+    api-url: https://api.siliconflow.cn/v1/embeddings
+    api-key: YOUR_SILICONFLOW_API_KEY
+    model: BAAI/bge-m3

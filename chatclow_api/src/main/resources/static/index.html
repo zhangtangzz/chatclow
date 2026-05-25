@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChatClow - AI 智能体平台</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            height: 100vh;
+            display: flex;
+            background: #343541;
+            color: #ececf1;
+        }
+
+        /* ========== 左侧边栏 ========== */
+        #sidebar {
+            width: 260px;
+            background: #202123;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid #444654;
+        }
+
+        .sidebar-header {
+            padding: 16px;
+            border-bottom: 1px solid #444654;
+        }
+
+        .sidebar-header h2 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #ececf1;
+        }
+
+        #new-chat-btn {
+            width: 100%;
+            padding: 10px;
+            background: transparent;
+            border: 1px solid #565869;
+            border-radius: 6px;
+            color: #ececf1;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        #new-chat-btn:hover {
+            background: #2a2b32;
+        }
+
+        #conversation-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px;
+        }
+
+        .conv-item {
+            padding: 10px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #c5c5d2;
+            margin-bottom: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .conv-item:hover {
+            background: #2a2b32;
+        }
+
+        .conv-item.active {
+            background: #343541;
+            color: #ececf1;
+        }
+
+        /* ========== 右侧聊天区域 ========== */
+        #chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #chat-header {
+            padding: 14px 20px;
+            border-bottom: 1px solid #444654;
+            font-size: 14px;
+            color: #8e8ea0;
+        }
+
+        /* 消息列表 */
+        #message-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0;
+        }
+
+        .welcome {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #8e8ea0;
+        }
+
+        .welcome h1 {
+            font-size: 28px;
+            color: #ececf1;
+            margin-bottom: 8px;
+        }
+
+        .welcome p {
+            font-size: 14px;
+        }
+
+        /* 单条消息 */
+        .message {
+            padding: 20px 24px;
+            display: flex;
+            gap: 16px;
+            line-height: 1.7;
+            font-size: 15px;
+        }
+
+        .message.user-msg {
+            background: #343541;
+        }
+
+        .message.assistant-msg {
+            background: #444654;
+        }
+
+        .msg-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+
+        .user-msg .msg-avatar {
+            background: #5436da;
+        }
+
+        .assistant-msg .msg-avatar {
+            background: #19c37d;
+        }
+
+        .msg-content {
+            flex: 1;
+            overflow-wrap: break-word;
+        }
+
+        /* 光标闪烁动画（SSE 用） */
+        .cursor-blink::after {
+            content: '▌';
+            animation: blink 0.7s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+
+        /* ========== 输入区域 ========== */
+        #input-area {
+            padding: 16px 24px 24px;
+            display: flex;
+            gap: 12px;
+            align-items: flex-end;
+        }
+
+        #user-input {
+            flex: 1;
+            padding: 12px 16px;
+            background: #40414f;
+            border: 1px solid #565869;
+            border-radius: 8px;
+            color: #ececf1;
+            font-size: 15px;
+            resize: none;
+            max-height: 150px;
+            line-height: 1.5;
+            font-family: inherit;
+        }
+
+        #user-input:focus {
+            outline: none;
+            border-color: #8e8ea0;
+        }
+
+        #send-btn {
+            padding: 12px 20px;
+            background: #19c37d;
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 15px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        #send-btn:hover {
+            background: #1a9d6a;
+        }
+
+        #send-btn:disabled {
+            background: #565869;
+            cursor: not-allowed;
+        }
+
+    </style>
+</head>
+<body>
+<!-- 左侧边栏：会话列表 -->
+<div id="sidebar">
+    <div class="sidebar-header">
+        <h2>ChatClow</h2>
+        <button id="new-chat-btn">+ 新对话</button>
+        <button id="logout-btn" style="width:100%;padding:8px;margin-top:8px;background:transparent;border:1px solid #ef4444;border-radius:6px;color:#ef4444;cursor:pointer;font-size:13px">退出登录</button>
+    </div>
+
+    <div id="conversation-list">
+        <!-- 动态渲染会话列表 -->
+    </div>
+</div>
+
+<!-- 右侧：聊天区域 -->
+<div id="chat-area">
+    <!-- 顶部栏 -->
+    <div id="chat-header">
+        <span id="chat-title">选择或创建一个对话</span>
+    </div>
+
+    <!-- 消息列表 -->
+    <div id="message-list">
+        <div class="welcome">
+            <h1>ChatClow</h1>
+            <p>AI 智能体平台，选择左侧对话或创建新对话开始</p>
+        </div>
+    </div>
+
+    <!-- 输入区域 -->
+    <div id="input-area">
+        <textarea id="user-input" placeholder="输入消息... (Enter 发送, Shift+Enter 换行)" rows="1"></textarea>
+        <button id="send-btn">发送</button>
+    </div>
+</div>
+
+<script>
+    // ==================== 配置 ====================
+    const API_BASE = 'http://localhost:8080';
+    let token = localStorage.getItem('chatclow_token') || '';
+    let userId = parseInt(localStorage.getItem('chatclow_userId')) || 0;
+    let currentConvId = null;  // 当前会话ID
+    let agentId = 1;           // 默认智能体ID，后续可做成下拉选择
+
+    // ==================== 页面初始化 ====================
+    document.addEventListener('DOMContentLoaded', () => {
+        if (!token) {
+            showLoginModal();
+        } else {
+            // 已登录，加载会话列表
+            loadConversations();
+        }
+
+        document.getElementById('send-btn').addEventListener('click', sendMessage);
+        document.getElementById('user-input').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+        document.getElementById('new-chat-btn').addEventListener('click', newChat);
+        document.getElementById('logout-btn').addEventListener('click', doLogout);
+
+        document.getElementById('user-input').addEventListener('input', function () {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 150) + 'px';
+        });
+    });
+
+    // ==================== 登录 ====================
+    function showLoginModal() {
+        const list = document.getElementById('message-list');
+        list.innerHTML = `
+        <div class="welcome">
+            <h1>ChatClow</h1>
+            <p style="margin-bottom:20px">请先登录</p>
+            <div style="display:flex;flex-direction:column;gap:10px;width:280px">
+                <input id="login-user" type="text" placeholder="用户名"
+                    style="padding:10px 14px;background:#40414f;border:1px solid #565869;
+                    border-radius:6px;color:#ececf1;font-size:14px">
+                <input id="login-pass" type="password" placeholder="密码"
+                    style="padding:10px 14px;background:#40414f;border:1px solid #565869;
+                    border-radius:6px;color:#ececf1;font-size:14px">
+                <button onclick="doLogin()" style="padding:10px;background:#19c37d;
+                    border:none;border-radius:6px;color:#fff;font-size:14px;cursor:pointer">
+                    登录</button>
+                <p id="login-err" style="color:#ef4444;font-size:13px;display:none"></p>
+            </div>
+        </div>
+    `;
+    }
+
+    async function doLogin() {
+        const username = document.getElementById('login-user').value.trim();
+        const password = document.getElementById('login-pass').value.trim();
+        const errEl = document.getElementById('login-err');
+
+        if (!username || !password) {
+            errEl.textContent = '请输入用户名和密码';
+            errEl.style.display = 'block';
+            return;
+        }
+
+        try {
+            const res = await fetch(API_BASE + '/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'username=' + encodeURIComponent(username) + '&password=' + encodeURIComponent(password)
+            });
+            const data = await res.json();
+
+            if (data.code === 200 && data.data) {
+                // 登录成功，保存 token 和 userId
+                token = data.data.token;
+                userId = data.data.user ? data.data.user.id : data.data.userId;
+                localStorage.setItem('chatclow_token', token);
+                localStorage.setItem('chatclow_userId', userId);
+                // 刷新页面进入聊天
+                location.reload();
+            } else {
+                errEl.textContent = data.msg || '登录失败';
+                errEl.style.display = 'block';
+            }
+        } catch (e) {
+            errEl.textContent = '网络错误: ' + e.message;
+            errEl.style.display = 'block';
+        }
+    }
+
+    // ==================== 聊天核心（SSE 流式） ====================
+    async function sendMessage() {
+        const input = document.getElementById('user-input');
+        const text = input.value.trim();
+        if (!text) return;
+        if (!token) { showLoginModal(); return; }
+
+        // 清空输入框
+        input.value = '';
+        input.style.height = 'auto';
+
+        // 移除欢迎页
+        const welcome = document.querySelector('.welcome');
+        if (welcome) welcome.remove();
+
+        // 渲染用户消息
+        appendMessage('user', text);
+
+        // 渲染 AI 消息占位
+        const aiEl = appendMessage('assistant', '');
+        const contentEl = aiEl.querySelector('.msg-content');
+        contentEl.classList.add('cursor-blink');
+
+        // 禁用发送按钮
+        const btn = document.getElementById('send-btn');
+        btn.disabled = true;
+        btn.textContent = '...';
+
+        try {
+            const res = await fetch(API_BASE + '/api/chat/send-stream', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token
+                },
+                body: JSON.stringify({
+                    agentId: agentId,
+                    userId: userId,
+                    message: text,
+                    conversationId: currentConvId
+                })
+            });
+
+            if (!res.ok) {
+                throw new Error('HTTP ' + res.status);
+            }
+
+            // ===== 读取 SSE 流 =====
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let fullText = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+
+                // 按换行拆分，处理完整的行
+                const lines = buffer.split('\n');
+                buffer = lines.pop(); // 最后一行可能不完整，留着下次拼
+
+                for (const line of lines) {
+                    if (line.startsWith('data:')) {
+                        const data = line.substring(5);
+
+                        // ⭐ 特殊事件：conversationId
+                        if (data.startsWith('CONV_ID:')) {
+                            currentConvId = parseInt(data.substring(8));
+                            addConvToList(currentConvId);
+                            continue;
+                        }
+
+                        if (data.trim() === '[DONE]') continue;
+
+                        // 普通文字，追加显示
+                        fullText += data;
+                        contentEl.textContent = fullText;
+                        // 自动滚到底部
+                        document.getElementById('message-list').scrollTop =
+                            document.getElementById('message-list').scrollHeight;
+                    }
+                }
+            }
+
+        } catch (e) {
+            contentEl.textContent = '❌ 网络错误: ' + e.message;
+        }
+
+        // 恢复发送按钮
+        contentEl.classList.remove('cursor-blink');
+        btn.disabled = false;
+        btn.textContent = '发送';
+    }
+
+    // ==================== 渲染消息 ====================
+    function appendMessage(role, text) {
+        const list = document.getElementById('message-list');
+        const div = document.createElement('div');
+        div.className = 'message ' + (role === 'user' ? 'user-msg' : 'assistant-msg');
+
+        const avatar = role === 'user' ? '👤' : '🤖';
+        div.innerHTML = `
+        <div class="msg-avatar">${avatar}</div>
+        <div class="msg-content">${escapeHtml(text)}</div>
+    `;
+        list.appendChild(div);
+        // 滚动到底部
+        list.scrollTop = list.scrollHeight;
+        return div;
+    }
+
+    function escapeHtml(text) {
+        const d = document.createElement('div');
+        d.textContent = text;
+        return d.innerHTML;
+    }
+
+    function addConvToList(convId) {
+        if (!convId) return;
+        // 如果已存在，只高亮
+        const existing = document.querySelector(`.conv-item[data-id="${convId}"]`);
+        if (existing) {
+            document.querySelectorAll('.conv-item').forEach(el => el.classList.remove('active'));
+            existing.classList.add('active');
+            return;
+        }
+        const list = document.getElementById('conversation-list');
+        const div = document.createElement('div');
+        div.className = 'conv-item active';
+        div.dataset.id = convId;
+        div.textContent = '对话 ' + convId;
+        div.onclick = () => switchConversation(convId);
+        document.querySelectorAll('.conv-item').forEach(el => el.classList.remove('active'));
+        list.prepend(div);
+    }
+
+    // ==================== 页面加载时拉取会话列表 ====================
+    async function loadConversations() {
+        if (!token || !userId) return;
+        try {
+            const res = await fetch(API_BASE + '/api/conversation/list?userId=' + userId, {
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            const data = await res.json();
+            if (data.code === 200 && data.data) {
+                const list = document.getElementById('conversation-list');
+                list.innerHTML = '';
+                // 倒序显示，最新的在上面
+                const convs = [...data.data].reverse();
+                convs.forEach(conv => {
+                    const div = document.createElement('div');
+                    div.className = 'conv-item';
+                    div.dataset.id = conv.id;
+                    div.textContent = conv.title || '对话 ' + conv.id;
+                    div.onclick = () => switchConversation(conv.id);
+                    list.appendChild(div);
+                });
+            }
+        } catch (e) {
+            console.error('加载会话列表失败:', e);
+        }
+    }
+
+    // ==================== 切换会话，加载历史消息 ====================
+    async function switchConversation(convId) {
+        currentConvId = convId;
+
+        // 高亮当前会话
+        document.querySelectorAll('.conv-item').forEach(el => {
+            el.classList.toggle('active', el.dataset.id == convId);
+        });
+
+        // 清空消息区
+        const msgList = document.getElementById('message-list');
+        msgList.innerHTML = '';
+
+        // 加载历史消息
+        try {
+            const res = await fetch(API_BASE + '/api/record/list?conversationId=' + convId, {
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            const data = await res.json();
+            if (data.code === 200 && data.data) {
+                data.data.forEach(record => {
+                    appendMessage(record.role, record.content);
+                });
+            }
+        } catch (e) {
+            console.error('加载历史消息失败:', e);
+        }
+    }
+
+    // ==================== 新建对话 ====================
+    function newChat() {
+        currentConvId = null;
+        document.getElementById('message-list').innerHTML = `
+        <div class="welcome">
+            <h1>ChatClow</h1>
+            <p>新对话已创建，开始聊天吧</p>
+        </div>
+    `;
+        // 取消所有高亮
+        document.querySelectorAll('.conv-item').forEach(el => el.classList.remove('active'));
+    }
+
+    // ==================== 退出登录 ====================
+    function doLogout() {
+        localStorage.removeItem('chatclow_token');
+        localStorage.removeItem('chatclow_userId');
+        token = '';
+        userId = 0;
+        currentConvId = null;
+        location.reload();
+    }
+
+</script>
+</body>
+</html>

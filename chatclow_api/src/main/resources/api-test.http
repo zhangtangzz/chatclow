@@ -1,0 +1,26 @@
+### 1. 查询用户会话列表（GET）
+GET http://localhost:8080/api/conversation/list?userId=1
+
+### 2. 创建新会话（POST）
+POST http://localhost:8080/api/conversation/create
+Content-Type: application/x-www-form-urlencoded
+
+userId=1&title=我的第一个对话
+
+### 3. 保存聊天记录（POST）
+POST http://localhost:8080/api/record/save
+Content-Type: application/x-www-form-urlencoded
+
+conversationId=1&role=user&content=你好AI
+
+### 4. 查询聊天记录（GET）
+GET http://localhost:8080/api/record/list?conversationId=1
+
+### 5. 注册新用户（POST）
+POST http://localhost:8080/api/user/register
+Content-Type: application/x-www-form-urlencoded
+
+username=testuser&password=123456&email=test@qq.com
+
+### 6. 查询用户信息（GET）
+GET http://localhost:8080/api/user/testuser
