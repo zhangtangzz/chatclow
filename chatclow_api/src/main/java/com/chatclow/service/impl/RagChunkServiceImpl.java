@@ -7,6 +7,8 @@ import com.chatclow.service.RagChunkService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.List;
 
 @Service
@@ -56,5 +58,26 @@ public class RagChunkServiceImpl implements RagChunkService {
         LambdaQueryWrapper<RagChunk> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(RagChunk::getDocumentId, documentId);
         return ragChunkMapper.delete(wrapper);
+    }
+
+    /**
+     * 计算文本内容的 SHA-256 哈希值
+     * 用于切片级别去重：相同内容的切片，哈希值完全一致
+     */
+    private String sha256(String text) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hashBytes = digest.digest(text.getBytes(StandardCharsets.UTF_8));
+            // 转换为 16 进制字符串
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hashBytes) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) hexString.append('0');
+                hexString.append(hex);
+            }
+            return hexString.toString();
+        } catch (Exception e) {
+            throw new RuntimeException("SHA-256 计算失败", e);
+        }
     }
 }

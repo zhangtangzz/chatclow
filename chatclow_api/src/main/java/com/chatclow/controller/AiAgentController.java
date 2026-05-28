@@ -60,6 +60,16 @@ public class AiAgentController {
     }
 
     /**
+     * 查询所有智能体（管理员用，含禁用）
+     * GET /api/agent/admin/list
+     */
+    @GetMapping("/admin/list")
+    public R<List<AiAgent>> adminListAll() {
+        List<AiAgent> list = aiAgentService.listAll();
+        return R.ok("查询成功", list);
+    }
+
+    /**
      * 根据ID查询智能体
      * GET /api/agent/{id}
      */

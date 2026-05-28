@@ -24,6 +24,7 @@ public class LoginController{
     @PostMapping("/login")
     public R<Map<String, Object>> login(@RequestParam String username,
                                          @RequestParam String password){
+
         //1.根据用户名查用户
         User user = userService.getByUsername(username);
 
@@ -44,6 +45,7 @@ public class LoginController{
         data.put("token",token);
         data.put("userId",user.getId());
         data.put("username",user.getUsername());
+        data.put("role",user.getRole());  // 补上 role 字段
 
         return R.ok("登陆成功",data);
     }

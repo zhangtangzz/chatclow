@@ -3,15 +3,23 @@
     <!-- 左侧边栏 -->
     <div class="sidebar">
       <div class="sidebar-header">
-        <h3>ChatClow</h3>
+        <div class="logo">
+          <el-icon :size="24"><ChatDotRound /></el-icon>
+          <h2>ChatClow</h2>
+        </div>
         <el-button type="primary" size="small" @click="newConversation" :icon="Plus" circle />
       </div>
 
       <!-- 智能体选择 -->
       <div class="agent-select">
         <div style="display: flex; gap: 8px; align-items: center;">
-          <el-select v-model="currentAgentId" placeholder="选择智能体" size="small" style="flex: 1"
-            @change="onAgentChange">
+          <el-select
+            v-model="currentAgentId"
+            placeholder="选择智能体"
+            size="small"
+            style="flex: 1"
+            @change="onAgentChange"
+          >
             <el-option v-for="agent in agents" :key="agent.id" :label="agent.name" :value="agent.id" />
           </el-select>
           <el-button size="small" :icon="Plus" @click="showAgentDialog = true" title="新建智能体" />
@@ -23,36 +31,91 @@
         <div v-if="conversations.length === 0" class="empty-sidebar-tip">
           暂无会话
         </div>
-        <div v-for="conv in conversations" :key="conv.id"
+        <div
+          v-for="conv in conversations"
+          :key="conv.id"
           :class="['conv-item', { active: currentConvId === conv.id }]"
-          @click="switchConversation(conv)">
+          @click="switchConversation(conv)"
+        >
           <el-icon><ChatDotRound /></el-icon>
           <span class="conv-title">{{ conv.title || '新对话' }}</span>
+          <!-- 记忆指示点 -->
+          <div
+            v-if="conv.memoryEnabled"
+            class="memory-dot"
+            title="已启用记忆"
+          />
         </div>
       </div>
 
       <!-- 底部导航 -->
       <div class="sidebar-footer">
         <el-button text @click="$router.push('/knowledge')">
-          <el-icon><FolderOpened /></el-icon> 知识库
+          <el-icon><FolderOpened /></el-icon>
+          知识库
         </el-button>
         <el-button text @click="handleLogout">
-          <el-icon><SwitchButton /></el-icon> 退出
+          <el-icon><SwitchButton /></el-icon>
+          退出
         </el-button>
       </div>
     </div>
 
     <!-- 右侧聊天区域 -->
     <div class="chat-main">
+      <!-- 聊天顶部工具栏 -->
+      <div class="chat-toolbar" v-if="currentAgentId">
+        <div class="toolbar-left">
+          <el-tag size="small" effect="plain" type="info">
+            {{ getCurrentAgentName() }}
+          </el-tag>
+          <el-tag v-if="memoryEnabled" size="small" effect="plain" type="success">
+            <el-icon><Memo /></el-icon>
+            记忆已启用
+          </el-tag>
+        </div>
+        <div class="toolbar-right">
+          <!-- 记忆开关 -->
+          <div class="memory-switch">
+            <span class="switch-label">记忆</span>
+            <el-switch
+              v-model="memoryEnabled"
+              :active-value="true"
+              :inactive-value="false"
+              size="small"
+              @change="onMemoryChange"
+            />
+          </div>
+          <el-button
+            v-if="currentConvId"
+            size="small"
+            text
+            type="info"
+            @click="clearMemory"
+            title="清除当前对话的记忆"
+          >
+            <el-icon><Delete /></el-icon>
+            清除记忆
+          </el-button>
+        </div>
+      </div>
+
       <div class="chat-messages" ref="messagesRef">
         <div v-if="messages.length === 0" class="empty-tip">
-          <el-icon :size="48" color="#c0c4cc"><ChatLineSquare /></el-icon>
-          <p>选择一个智能体，开始对话吧</p>
+          <el-icon :size="64" color="#c0c4cc"><ChatLineSquare /></el-icon>
+          <h3>选择一个智能体，开始对话</h3>
+          <p v-if="memoryEnabled" class="memory-hint">
+            <el-icon><Memo /></el-icon>
+            已启用记忆，AI 会记住之前的对话内容
+          </p>
         </div>
 
         <div v-for="(msg, idx) in messages" :key="idx" :class="['message', msg.role]">
           <div class="message-avatar">
-            <el-avatar :size="32" :style="{ background: msg.role === 'user' ? '#409eff' : '#67c23a' }">
+            <el-avatar
+              :size="36"
+              :style="{ background: msg.role === 'user' ? '#409eff' : '#67c23a' }"
+            >
               {{ msg.role === 'user' ? '我' : 'AI' }}
             </el-avatar>
           </div>
@@ -67,14 +130,14 @@
               <el-tag size="small" type="info">{{ msg.toolResult }}</el-tag>
             </div>
             <!-- 文字内容（支持 Markdown） -->
-            <div v-if="msg.content" class="markdown-body" v-html="renderMarkdown(msg.content)"></div>
+            <div v-if="msg.content" class="markdown-body" v-html="renderMarkdown(msg.content)" />
           </div>
         </div>
 
         <!-- 正在输入提示 -->
         <div v-if="streaming" class="message assistant">
           <div class="message-avatar">
-            <el-avatar :size="32" :style="{ background: '#67c23a' }">AI</el-avatar>
+            <el-avatar :size="36" :style="{ background: '#67c23a' }">AI</el-avatar>
           </div>
           <div class="message-content">
             <div class="typing-indicator">
@@ -86,8 +149,14 @@
 
       <!-- 输入区域 -->
       <div class="chat-input">
-        <el-input v-model="inputMessage" placeholder="输入消息，Enter 发送" :disabled="streaming"
-          @keyup.enter="sendMessage" size="large" clearable>
+        <el-input
+          v-model="inputMessage"
+          placeholder="输入消息，Enter 发送"
+          :disabled="streaming"
+          @keyup.enter="sendMessage"
+          size="large"
+          clearable
+        >
           <template #append>
             <el-button type="primary" :icon="Promotion" :loading="streaming" @click="sendMessage" />
           </template>
@@ -110,8 +179,12 @@
           </el-select>
         </el-form-item>
         <el-form-item label="系统提示词" prop="systemPrompt">
-          <el-input v-model="agentForm.systemPrompt" type="textarea" :rows="4"
-            placeholder="定义智能体的角色和行为，如：你是一个专业的Java开发助手" />
+          <el-input
+            v-model="agentForm.systemPrompt"
+            type="textarea"
+            :rows="4"
+            placeholder="定义智能体的角色和行为，如：你是一个专业的Java开发助手"
+          />
         </el-form-item>
         <el-form-item label="启用RAG">
           <el-switch v-model="agentForm.kbEnabled" :active-value="1" :inactive-value="0" />
@@ -138,8 +211,17 @@ import { chatStream, getConversations, createConversation } from '../api/chat'
 import { getAgentList, addAgent } from '../api/agent'
 import { getModelList } from '../api/model'
 import { getKbList } from '../api/knowledge'
-import { ElMessage } from 'element-plus'
-import { Plus, ChatDotRound, FolderOpened, SwitchButton, ChatLineSquare, Promotion, Loading } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import {
+  Plus,
+  ChatDotRound,
+  FolderOpened,
+  SwitchButton,
+  ChatLineSquare,
+  Promotion,
+  Loading,
+  Delete,
+} from '@element-plus/icons-vue'
 import MarkdownIt from 'markdown-it'
 
 const md = new MarkdownIt({ html: false, breaks: true })
@@ -157,6 +239,9 @@ const inputMessage = ref('')
 const streaming = ref(false)
 const messagesRef = ref(null)
 
+// 记忆开关
+const memoryEnabled = ref(true) // 默认启用
+
 // 新建智能体相关
 const showAgentDialog = ref(false)
 const agentCreating = ref(false)
@@ -169,12 +254,52 @@ const agentForm = ref({
   modelId: null,
   systemPrompt: '',
   kbEnabled: 0,
-  kbId: null
+  kbId: null,
 })
 const agentRules = {
   name: [{ required: true, message: '请输入智能体名称', trigger: 'blur' }],
   modelId: [{ required: true, message: '请选择模型', trigger: 'change' }],
-  systemPrompt: [{ required: true, message: '请输入系统提示词', trigger: 'blur' }]
+  systemPrompt: [{ required: true, message: '请输入系统提示词', trigger: 'blur' }],
+}
+
+// 获取当前智能体名称
+function getCurrentAgentName() {
+  const agent = agents.value.find(a => a.id === currentAgentId.value)
+  return agent ? agent.name : ''
+}
+
+// 记忆开关变化
+function onMemoryChange(val) {
+  if (val) {
+    ElMessage.success('已启用记忆，AI 会记住对话内容')
+  } else {
+    ElMessage.info('已关闭记忆，AI 不会记住之前的对话')
+  }
+  // 清空当前消息，重新开始
+  if (!val) {
+    messages.value = []
+  }
+}
+
+// 清除当前对话的记忆
+async function clearMemory() {
+  if (!currentConvId.value) {
+    ElMessage.warning('当前没有活跃的对话')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      '确定清除当前对话的记忆？AI 将不再记住之前的对话内容。',
+      '清除记忆',
+      { type: 'warning' }
+    )
+    // TODO: 后端实现 DELETE /api/chat/conversation/memory/{convId} 后替换
+    ElMessage.success('记忆已清除（前端）')
+    messages.value = []
+    currentConvId.value = null
+  } catch (e) {
+    // 用户取消
+  }
 }
 
 // Markdown 渲染
@@ -247,7 +372,7 @@ watch(showAgentDialog, (val) => {
       modelId: null,
       systemPrompt: '',
       kbEnabled: 0,
-      kbId: null
+      kbId: null,
     }
   }
 })
@@ -262,7 +387,7 @@ async function handleCreateAgent() {
     await addAgent({
       ...agentForm.value,
       userId: userStore.userId,
-      status: 1
+      status: 1,
     })
     ElMessage.success('智能体创建成功')
     showAgentDialog.value = false
@@ -294,6 +419,7 @@ function newConversation() {
 function switchConversation(conv) {
   currentConvId.value = conv.id
   messages.value = []
+  // TODO: 加载该会话的历史消息
 }
 
 // 发送消息
@@ -321,7 +447,8 @@ async function sendMessage() {
         agentId: currentAgentId.value,
         userId: userStore.userId,
         message: text,
-        conversationId: currentConvId.value
+        conversationId: currentConvId.value,
+        memoryEnabled: memoryEnabled.value, // 传递记忆开关状态
       },
       (event) => {
         switch (event.type) {
@@ -381,36 +508,47 @@ onMounted(() => {
 
 /* 左侧边栏 */
 .sidebar {
-  width: 260px;
-  background: #1d1e2c;
+  width: 280px;
+  background: linear-gradient(180deg, #1d1e2c 0%, #2c2d3c 100%);
   color: #fff;
   display: flex;
   flex-direction: column;
+  box-shadow: 2px 0 12px rgba(0, 0, 0, 0.1);
 }
 
 .sidebar-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px;
-  border-bottom: 1px solid rgba(255,255,255,0.1);
+  padding: 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.sidebar-header h3 {
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logo h2 {
   margin: 0;
-  font-size: 18px;
-  color: #67c23a;
+  font-size: 20px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #67c23a 0%, #409eff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .agent-select {
-  padding: 12px 16px;
-  border-bottom: 1px solid rgba(255,255,255,0.1);
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .conversation-list {
   flex: 1;
   overflow-y: auto;
-  padding: 8px;
+  padding: 12px;
 }
 
 .empty-sidebar-tip {
@@ -423,33 +561,43 @@ onMounted(() => {
 .conv-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  border-radius: 8px;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 10px;
   cursor: pointer;
   font-size: 14px;
   color: #c0c4cc;
-  transition: background 0.2s;
+  transition: all 0.2s;
+  margin-bottom: 4px;
 }
 
 .conv-item:hover {
-  background: rgba(255,255,255,0.08);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .conv-item.active {
-  background: rgba(103,194,58,0.15);
+  background: rgba(103, 194, 58, 0.15);
   color: #67c23a;
 }
 
 .conv-title {
+  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.memory-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #67c23a;
+  flex-shrink: 0;
+}
+
 .sidebar-footer {
-  padding: 12px 16px;
-  border-top: 1px solid rgba(255,255,255,0.1);
+  padding: 16px 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -458,6 +606,14 @@ onMounted(() => {
 .sidebar-footer .el-button {
   color: #909399;
   justify-content: flex-start;
+  padding: 10px 16px;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.sidebar-footer .el-button:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
 }
 
 /* 右侧聊天区 */
@@ -468,10 +624,55 @@ onMounted(() => {
   background: #fff;
 }
 
+/* 聊天工具栏 */
+.chat-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 24px;
+  background: #fafbfc;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.memory-switch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  background: #f0f9ff;
+  border-radius: 20px;
+}
+
+.switch-label {
+  font-size: 13px;
+  color: #606266;
+}
+
+.memory-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #909399;
+  font-size: 13px;
+  margin-top: 12px;
+}
+
 .chat-messages {
   flex: 1;
   overflow-y: auto;
-  padding: 20px 24px;
+  padding: 24px 32px;
 }
 
 .empty-tip {
@@ -483,20 +684,30 @@ onMounted(() => {
   color: #c0c4cc;
 }
 
+.empty-tip h3 {
+  margin: 16px 0 8px;
+  font-size: 18px;
+  color: #909399;
+}
+
 .empty-tip p {
-  margin-top: 16px;
-  font-size: 16px;
+  font-size: 14px;
+  color: #c0c4cc;
 }
 
 /* 消息气泡 */
 .message {
   display: flex;
   gap: 12px;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .message.user {
   flex-direction: row-reverse;
+}
+
+.message-avatar {
+  flex-shrink: 0;
 }
 
 .message-content {
@@ -509,7 +720,7 @@ onMounted(() => {
 }
 
 .message.user .message-content {
-  background: #409eff;
+  background: linear-gradient(135deg, #409eff 0%, #3a8ee6 100%);
   color: #fff;
   border-bottom-right-radius: 4px;
 }
@@ -542,7 +753,7 @@ onMounted(() => {
 }
 
 .markdown-body :deep(code) {
-  background: rgba(0,0,0,0.06);
+  background: rgba(0, 0, 0, 0.06);
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 13px;
@@ -591,9 +802,22 @@ onMounted(() => {
 .chat-input {
   padding: 16px 24px;
   border-top: 1px solid #ebeef5;
+  background: #fafbfc;
 }
 
-.chat-input .el-input-group__append {
+.chat-input :deep(.el-input__wrapper) {
+  border-radius: 12px;
+  padding-right: 0;
+}
+
+.chat-input :deep(.el-input-group__append) {
   padding: 0;
+  border-radius: 0 12px 12px 0;
+}
+
+.chat-input :deep(.el-input-group__append button) {
+  border-radius: 0 12px 12px 0;
+  border: none;
+  padding: 0 20px;
 }
 </style>

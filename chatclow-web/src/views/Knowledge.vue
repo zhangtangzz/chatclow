@@ -1,152 +1,351 @@
 <template>
   <div class="kb-layout">
-    <!-- 顶部导航 -->
+    <!-- 顶部导航栏 -->
     <div class="kb-header">
-      <el-button :icon="ArrowLeft" @click="$router.push('/')">返回聊天</el-button>
-      <h3>知识库管理</h3>
-      <el-button type="primary" :icon="Plus" @click="showAddDialog = true">新建知识库</el-button>
+      <div class="header-left">
+        <el-button class="back-btn" :icon="ArrowLeft" @click="$router.push('/')">
+          返回聊天
+        </el-button>
+        <h2 class="page-title">知识库管理</h2>
+      </div>
+      <div class="header-right">
+        <el-button
+          v-if="isAdmin"
+          type="primary"
+          :icon="Plus"
+          @click="showAddDialog = true"
+          class="create-btn"
+        >
+          新建知识库
+        </el-button>
+      </div>
     </div>
 
     <!-- 知识库列表 -->
     <div class="kb-content">
-      <el-row :gutter="20">
-        <el-col :span="8" v-for="kb in kbList" :key="kb.id">
-          <el-card shadow="hover" class="kb-card">
-            <template #header>
-              <div class="kb-card-header">
-                <span>{{ kb.name }}</span>
-                <el-dropdown>
-                  <el-button :icon="MoreFilled" size="small" text />
-                  <template #dropdown>
-                    <el-dropdown-menu>
-                      <el-dropdown-item @click="openUploadDialog(kb)">上传文档</el-dropdown-item>
-                      <el-dropdown-item @click="deleteKb(kb.id)">删除知识库</el-dropdown-item>
-                    </el-dropdown-menu>
-                  </template>
-                </el-dropdown>
-              </div>
-            </template>
-            <p class="kb-desc">{{ kb.description || '暂无描述' }}</p>
-            <div class="kb-meta">
-              <el-tag size="small" :type="kb.status === 1 ? 'success' : 'info'">
+      <!-- 空状态 -->
+      <div v-if="kbList.length === 0" class="empty-state">
+        <el-icon :size="64" color="#c0c4cc"><FolderOpened /></el-icon>
+        <p class="empty-text">暂无知识库</p>
+        <p class="empty-hint" v-if="isAdmin">点击右上角"新建知识库"开始创建</p>
+      </div>
+
+      <!-- 卡片网格 -->
+      <div class="kb-grid" v-else>
+        <div
+          v-for="kb in kbList"
+          :key="kb.id"
+          class="kb-card"
+          :class="{ 'is-admin': isAdmin }"
+        >
+          <!-- 卡片头部 -->
+          <div class="card-header">
+            <div class="kb-icon">
+              <el-icon :size="24"><Collection /></el-icon>
+            </div>
+            <div class="kb-info">
+              <h3 class="kb-name">{{ kb.name }}</h3>
+              <el-tag
+                size="small"
+                :type="kb.status === 1 ? 'success' : 'info'"
+                effect="plain"
+                round
+              >
                 {{ kb.status === 1 ? '已启用' : '已禁用' }}
               </el-tag>
             </div>
+            <!-- 管理员操作下拉菜单 -->
+            <el-dropdown v-if="isAdmin" trigger="click" class="card-actions">
+              <el-button :icon="MoreFilled" size="small" text type="info" />
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item @click="openUploadDialog(kb)">
+                    <el-icon><Upload /></el-icon>
+                    上传文档
+                  </el-dropdown-item>
+                  <el-dropdown-item @click="editKb(kb)">
+                    <el-icon><Edit /></el-icon>
+                    编辑信息
+                  </el-dropdown-item>
+                  <el-dropdown-item divided @click="deleteKb(kb.id)">
+                    <el-icon><Delete /></el-icon>
+                    <span style="color: #f56c6c">删除知识库</span>
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </div>
 
-            <!-- 文档列表 -->
-            <div class="doc-list" v-if="kb._docs && kb._docs.length > 0">
-              <div v-for="doc in kb._docs" :key="doc.id" class="doc-item">
+          <!-- 卡片描述 -->
+          <div class="card-body">
+            <p class="kb-desc">{{ kb.description || '暂无描述' }}</p>
+
+            <!-- 存储后端标签 -->
+            <div class="storage-badge" v-if="kb.storeId">
+              <el-tag size="small" effect="plain" type="warning">
+                <el-icon><Coin /></el-icon>
+                {{ getStoreName(kb.storeId) }}
+              </el-tag>
+            </div>
+          </div>
+
+          <!-- 文档列表 -->
+          <div class="card-footer">
+            <div
+              class="doc-list"
+              v-if="kb._docs && kb._docs.length > 0"
+            >
+              <div
+                v-for="doc in kb._docs.slice(0, 3)"
+                :key="doc.id"
+                class="doc-item"
+              >
                 <el-icon><Document /></el-icon>
-                <span>{{ doc.fileName || doc.title || '文档' }}</span>
-                <el-button :icon="Delete" size="small" text type="danger"
-                  @click.stop="deleteDocument(doc.id)" />
+                <span class="doc-name">{{ doc.fileName || doc.title || '文档' }}</span>
+                <el-button
+                  v-if="isAdmin"
+                  :icon="Delete"
+                  size="small"
+                  text
+                  type="danger"
+                  @click.stop="deleteDocument(doc.id)"
+                />
+              </div>
+              <div v-if="kb._docs.length > 3" class="doc-more">
+                还有 {{ kb._docs.length - 3 }} 个文档...
               </div>
             </div>
-            <el-button text size="small" @click="loadDocs(kb)"
-              v-if="!kb._docs" :icon="FolderOpened">
-              查看文档
+
+            <!-- 查看文档按钮 -->
+            <el-button
+              v-if="!kb._docs"
+              text
+              size="small"
+              @click="loadDocs(kb)"
+              :icon="FolderOpened"
+              class="view-docs-btn"
+            >
+              查看文档 ({{ kb.docCount || 0 }})
             </el-button>
-          </el-card>
-        </el-col>
-      </el-row>
+            <div v-else class="doc-count">
+              <el-icon><Document /></el-icon>
+              {{ kb._docs.length }} 个文档
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <!-- 新建知识库对话框 -->
-    <el-dialog v-model="showAddDialog" title="新建知识库" width="450px">
-      <el-form :model="kbForm" label-width="80px">
-        <el-form-item label="名称">
-          <el-input v-model="kbForm.name" placeholder="请输入知识库名称" />
+    <!-- 新建/编辑知识库对话框 -->
+    <el-dialog
+      v-model="showAddDialog"
+      :title="isEditMode ? '编辑知识库' : '新建知识库'"
+      width="520px"
+      :close-on-click-modal="false"
+      class="kb-dialog"
+    >
+      <el-form :model="kbForm" label-width="100px" class="kb-form">
+        <el-form-item label="知识库名称" required>
+          <el-input
+            v-model="kbForm.name"
+            placeholder="请输入知识库名称"
+            maxlength="50"
+            show-word-limit
+          />
         </el-form-item>
+
         <el-form-item label="描述">
-          <el-input v-model="kbForm.description" type="textarea" :rows="3" placeholder="知识库描述（可选）" />
+          <el-input
+            v-model="kbForm.description"
+            type="textarea"
+            :rows="3"
+            placeholder="描述知识库的用途（可选）"
+            maxlength="200"
+            show-word-limit
+          />
+        </el-form-item>
+
+        <!-- 存储后端选择器（仅管理员可见，创建时显示） -->
+        <el-form-item label="存储后端" v-if="isAdmin && !isEditMode">
+          <el-select
+            v-model="kbForm.storeId"
+            placeholder="选择向量存储后端"
+            style="width: 100%"
+          >
+            <el-option label="🗄️ MySQL（默认）" :value="1" />
+            <el-option label="🐘 PostgreSQL + pgvector" :value="2" />
+            <el-option label="🍃 MongoDB" :value="3" />
+          </el-select>
+          <div class="form-hint">
+            <el-icon><InfoFilled /></el-icon>
+            选择后不可修改，不同后端适用于不同场景
+          </div>
         </el-form-item>
       </el-form>
+
       <template #footer>
         <el-button @click="showAddDialog = false">取消</el-button>
-        <el-button type="primary" @click="handleAddKb">确定</el-button>
+        <el-button type="primary" @click="handleAddKb" :loading="submitting">
+          {{ isEditMode ? '保存修改' : '创建知识库' }}
+        </el-button>
       </template>
     </el-dialog>
 
     <!-- 上传文档对话框 -->
-    <el-dialog v-model="showUploadDialog" title="上传文档" width="450px">
-      <p style="color:#909399;margin-bottom:12px">上传到知识库: {{ uploadKb?.name }}</p>
-      <el-upload ref="uploadRef" drag :auto-upload="false" :limit="5"
+    <el-dialog
+      v-model="showUploadDialog"
+      title="上传文档"
+      width="520px"
+      class="upload-dialog"
+    >
+      <div class="upload-target">
+        <el-icon><FolderOpened /></el-icon>
+        <span>上传到：<strong>{{ uploadKb?.name }}</strong></span>
+      </div>
+
+      <el-upload
+        ref="uploadRef"
+        drag
+        :auto-upload="false"
+        :limit="10"
         accept=".pdf,.txt,.md,.docx,.doc"
-        :on-change="onFileChange">
-        <el-icon :size="48"><UploadFilled /></el-icon>
-        <div>拖拽文件到此处，或 <em>点击上传</em></div>
+        :on-change="onFileChange"
+        :on-exceed="onExceed"
+        class="upload-area"
+      >
+        <el-icon :size="48" color="#67c23a"><UploadFilled /></el-icon>
+        <div class="upload-text">
+          <em>点击上传</em> 或拖拽文件到此处
+        </div>
         <template #tip>
-          <p class="el-upload__tip">支持 PDF / TXT / Markdown / Word，单文件最大 50MB</p>
+          <div class="upload-tip">
+            支持 PDF / TXT / Markdown / Word，单文件 ≤ 50MB
+          </div>
         </template>
       </el-upload>
+
+      <!-- 已选文件列表 -->
+      <div class="file-list" v-if="fileList.length > 0">
+        <div class="file-list-title">已选择 {{ fileList.length }} 个文件：</div>
+        <div
+          v-for="(file, idx) in fileList"
+          :key="idx"
+          class="file-item"
+        >
+          <el-icon><Document /></el-icon>
+          <span class="file-name">{{ file.name }}</span>
+          <span class="file-size">({{ formatFileSize(file.size) }})</span>
+          <el-button
+            :icon="Close"
+            size="small"
+            text
+            type="danger"
+            @click="removeFile(idx)"
+          />
+        </div>
+      </div>
+
       <template #footer>
         <el-button @click="showUploadDialog = false">取消</el-button>
-        <el-button type="primary" :loading="uploading" @click="handleUpload">上传并处理</el-button>
+        <el-button
+          type="primary"
+          :loading="uploading"
+          @click="handleUpload"
+          :disabled="fileList.length === 0"
+        >
+          开始上传并处理
+        </el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
-import { getKbList, addKb, deleteKb as deleteKbApi, uploadDocument, getDocList, deleteDoc } from '../api/knowledge'
+import { ref, reactive, onMounted, computed } from 'vue'
+import {
+  getKbList,
+  addKb,
+  updateKb,
+  deleteKb as deleteKbApi,
+  uploadDocument,
+  getDocList,
+  deleteDoc,
+} from '../api/knowledge'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowLeft, Plus, MoreFilled, Document, Delete, FolderOpened, UploadFilled } from '@element-plus/icons-vue'
+import {
+  ArrowLeft,
+  Plus,
+  MoreFilled,
+  Document,
+  Delete,
+  FolderOpened,
+  UploadFilled,
+  Upload,
+  Edit,
+  Collection,
+  Coin,
+  InfoFilled,
+  Close,
+} from '@element-plus/icons-vue'
+import { useUserStore } from '../stores/user'
+
+const userStore = useUserStore()
+
+// 判断是否是管理员
+const isAdmin = computed(() => {
+  return userStore.username === 'admin' || userStore.userId === 1
+})
 
 const kbList = ref([])
 const showAddDialog = ref(false)
 const showUploadDialog = ref(false)
 const uploading = ref(false)
+const submitting = ref(false)
 const uploadKb = ref(null)
 const uploadRef = ref(null)
 const fileList = ref([])
+const isEditMode = ref(false)
+const editingKbId = ref(null)
 
-const kbForm = reactive({ name: '', description: '' })
+const kbForm = reactive({
+  name: '',
+  description: '',
+  storeId: 1, // 默认 MySQL
+})
+
+// 存储后端名称映射
+function getStoreName(storeId) {
+  const map = {
+    1: 'MySQL',
+    2: 'PostgreSQL + pgvector',
+    3: 'MongoDB',
+  }
+  return map[storeId] || '未知'
+}
+
+// 格式化文件大小
+function formatFileSize(bytes) {
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / 1024 / 1024).toFixed(1) + ' MB'
+}
 
 async function loadKbList() {
   try {
     const res = await getKbList()
-    kbList.value = (res.data || []).map(kb => ({ ...kb, _docs: null }))
-  } catch (e) { /* ignore */ }
+    kbList.value = (res.data || []).map((kb) => ({ ...kb, _docs: null }))
+  } catch (e) {
+    console.error('加载知识库失败:', e)
+  }
 }
 
 async function loadDocs(kb) {
   try {
     const res = await getDocList(kb.id)
     kb._docs = res.data || []
-  } catch (e) { /* ignore */ }
-}
-
-async function handleAddKb() {
-  if (!kbForm.name.trim()) {
-    ElMessage.warning('请输入知识库名称')
-    return
+  } catch (e) {
+    console.error('加载文档失败:', e)
   }
-  try {
-    await addKb(kbForm)
-    ElMessage.success('创建成功')
-    showAddDialog.value = false
-    kbForm.name = ''
-    kbForm.description = ''
-    loadKbList()
-  } catch (e) { /* ignore */ }
-}
-
-async function deleteKb(id) {
-  try {
-    await ElMessageBox.confirm('确定删除该知识库？', '提示', { type: 'warning' })
-    await deleteKbApi(id)
-    ElMessage.success('删除成功')
-    loadKbList()
-  } catch (e) { /* ignore */ }
-}
-
-async function deleteDocument(id) {
-  try {
-    await deleteDoc(id)
-    ElMessage.success('删除成功')
-    loadKbList()
-  } catch (e) { /* ignore */ }
 }
 
 function openUploadDialog(kb) {
@@ -155,8 +354,21 @@ function openUploadDialog(kb) {
   showUploadDialog.value = true
 }
 
-function onFileChange(file) {
-  fileList.value.push(file)
+function onFileChange(file, fileListRaw) {
+  // 检查文件大小（50MB）
+  if (file.size > 50 * 1024 * 1024) {
+    ElMessage.warning('文件大小不能超过 50MB')
+    return false
+  }
+  fileList.value = fileListRaw
+}
+
+function onExceed() {
+  ElMessage.warning('最多同时上传 10 个文件')
+}
+
+function removeFile(idx) {
+  fileList.value.splice(idx, 1)
 }
 
 async function handleUpload() {
@@ -164,16 +376,111 @@ async function handleUpload() {
     ElMessage.warning('请选择文件')
     return
   }
+
   uploading.value = true
+  let successCount = 0
+  let failCount = 0
+
   try {
     for (const f of fileList.value) {
-      await uploadDocument(f.raw, uploadKb.value.id)
+      try {
+        await uploadDocument(f.raw, uploadKb.value.id)
+        successCount++
+      } catch (e) {
+        failCount++
+        console.error('上传失败:', f.name, e)
+      }
     }
-    ElMessage.success('上传成功，正在处理中...')
+
+    if (successCount > 0) {
+      ElMessage.success(`成功上传 ${successCount} 个文件，正在处理中...`)
+    }
+    if (failCount > 0) {
+      ElMessage.error(`${failCount} 个文件上传失败`)
+    }
+
     showUploadDialog.value = false
     loadKbList()
-  } catch (e) { /* ignore */ } finally {
+  } catch (e) {
+    ElMessage.error('上传失败，请重试')
+  } finally {
     uploading.value = false
+  }
+}
+
+function editKb(kb) {
+  isEditMode.value = true
+  editingKbId.value = kb.id
+  kbForm.name = kb.name
+  kbForm.description = kb.description || ''
+  kbForm.storeId = kb.storeId || 1
+  showAddDialog.value = true
+}
+
+async function handleAddKb() {
+  if (!kbForm.name.trim()) {
+    ElMessage.warning('请输入知识库名称')
+    return
+  }
+
+  submitting.value = true
+  try {
+    if (isEditMode.value) {
+      // 编辑模式
+      await updateKb(editingKbId.value, {
+        name: kbForm.name,
+        description: kbForm.description,
+      })
+      ElMessage.success('修改成功')
+    } else {
+      // 创建模式
+      await addKb(kbForm)
+      ElMessage.success('知识库创建成功')
+    }
+
+    showAddDialog.value = false
+    resetForm()
+    loadKbList()
+  } catch (e) {
+    console.error('操作失败:', e)
+  } finally {
+    submitting.value = false
+  }
+}
+
+function resetForm() {
+  kbForm.name = ''
+  kbForm.description = ''
+  kbForm.storeId = 1
+  isEditMode.value = false
+  editingKbId.value = null
+}
+
+async function deleteKb(id) {
+  try {
+    await ElMessageBox.confirm(
+      '确定删除该知识库？此操作将同时删除所有关联的文档和向量数据。',
+      '确认删除',
+      { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' }
+    )
+    await deleteKbApi(id)
+    ElMessage.success('删除成功')
+    loadKbList()
+  } catch (e) {
+    // 用户取消
+  }
+}
+
+async function deleteDocument(id) {
+  try {
+    await ElMessageBox.confirm('确定删除该文档？', '确认删除', {
+      type: 'warning',
+    })
+    await deleteDoc(id)
+    ElMessage.success('删除成功')
+    loadKbList()
+  } catch (e) {
+    // 用户取消
   }
 }
 
@@ -185,65 +492,342 @@ onMounted(() => {
 <style scoped>
 .kb-layout {
   min-height: 100vh;
-  background: #f5f7fa;
+  background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
 }
 
+/* 顶部导航 */
 .kb-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 24px;
-  background: #fff;
-  border-bottom: 1px solid #ebeef5;
+  padding: 20px 32px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  position: sticky;
+  top: 0;
+  z-index: 100;
 }
 
-.kb-header h3 {
-  margin: 0;
-}
-
-.kb-content {
-  padding: 24px;
-}
-
-.kb-card {
-  margin-bottom: 20px;
-}
-
-.kb-card-header {
+.header-left {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  font-weight: bold;
+  gap: 20px;
+}
+
+.back-btn {
+  border: none;
+  background: #f4f4f5;
+  color: #606266;
+  padding: 8px 16px;
+  border-radius: 8px;
+  transition: all 0.3s;
+}
+
+.back-btn:hover {
+  background: #e9e9eb;
+  color: #409eff;
+}
+
+.page-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  color: #303133;
+  letter-spacing: -0.5px;
+}
+
+.create-btn {
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-weight: 500;
+  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.3);
+  transition: all 0.3s;
+}
+
+.create-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(64, 158, 255, 0.4);
+}
+
+/* 内容区域 */
+.kb-content {
+  padding: 32px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* 空状态 */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 120px 0;
+}
+
+.empty-text {
+  font-size: 18px;
+  color: #909399;
+  margin-top: 20px;
+}
+
+.empty-hint {
+  font-size: 14px;
+  color: #c0c4cc;
+  margin-top: 8px;
+}
+
+/* 知识库网格 */
+.kb-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 24px;
+}
+
+/* 知识库卡片 */
+.kb-card {
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.kb-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.1);
+  border-color: rgba(64, 158, 255, 0.3);
+}
+
+.kb-card.is-admin:hover {
+  border-color: rgba(64, 158, 255, 0.3);
+}
+
+/* 卡片头部 */
+.card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.kb-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.kb-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.kb-name {
+  margin: 0 0 8px 0;
+  font-size: 17px;
+  font-weight: 600;
+  color: #303133;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-actions {
+  flex-shrink: 0;
+}
+
+/* 卡片主体 */
+.card-body {
+  margin-bottom: 16px;
 }
 
 .kb-desc {
+  font-size: 14px;
   color: #909399;
-  font-size: 13px;
-  margin: 0 0 12px;
+  line-height: 1.6;
+  margin: 0 0 12px 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
-.kb-meta {
-  margin-bottom: 12px;
+.storage-badge {
+  margin-top: 8px;
+}
+
+/* 卡片底部 */
+.card-footer {
+  border-top: 1px solid #f0f0f0;
+  padding-top: 16px;
 }
 
 .doc-list {
-  border-top: 1px solid #ebeef5;
-  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .doc-item {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 0;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #f9fafb;
+  border-radius: 8px;
   font-size: 13px;
   color: #606266;
+  transition: all 0.2s;
 }
 
-.doc-item span {
+.doc-item:hover {
+  background: #f0f2f5;
+}
+
+.doc-name {
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.doc-more {
+  font-size: 12px;
+  color: #909399;
+  padding: 4px 12px;
+}
+
+.view-docs-btn {
+  color: #409eff;
+  font-size: 13px;
+}
+
+.doc-count {
+  font-size: 13px;
+  color: #909399;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 对话框样式 */
+.kb-dialog :deep(.el-dialog) {
+  border-radius: 16px;
+}
+
+.kb-dialog :deep(.el-dialog__header) {
+  padding: 24px 24px 0;
+}
+
+.kb-dialog :deep(.el-dialog__body) {
+  padding: 24px;
+}
+
+.kb-form {
+  margin-top: 16px;
+}
+
+.form-hint {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 上传对话框 */
+.upload-dialog :deep(.el-dialog__body) {
+  padding: 24px;
+}
+
+.upload-target {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: #f0f9ff;
+  border-radius: 10px;
+  margin-bottom: 20px;
+  color: #409eff;
+  font-size: 14px;
+}
+
+.upload-area {
+  margin-bottom: 20px;
+}
+
+.upload-area :deep(.el-upload-dragger) {
+  border-radius: 12px;
+  border: 2px dashed #dcdfe6;
+  transition: all 0.3s;
+}
+
+.upload-area :deep(.el-upload-dragger:hover) {
+  border-color: #409eff;
+  background: #f0f9ff;
+}
+
+.upload-text {
+  font-size: 14px;
+  color: #606266;
+  margin-top: 12px;
+}
+
+.upload-text em {
+  color: #409eff;
+  font-style: normal;
+  font-weight: 500;
+}
+
+.upload-tip {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 8px;
+}
+
+/* 文件列表 */
+.file-list {
+  margin-top: 16px;
+}
+
+.file-list-title {
+  font-size: 13px;
+  color: #606266;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #f9fafb;
+  border-radius: 8px;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.file-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-size {
+  color: #909399;
+  font-size: 12px;
 }
 </style>

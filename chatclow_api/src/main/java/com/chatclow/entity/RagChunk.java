@@ -1,6 +1,7 @@
 package com.chatclow.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import java.time.LocalDateTime;
@@ -26,6 +27,9 @@ public class RagChunk {
     private String contentHash;      // 内容哈希（去重用）
 
     private LocalDateTime createdDt;
+
+    @TableField(exist = false)
+    private float score;  // 向量检索相似度得分（非持久化）
 
     public RagChunk() {}
 
@@ -55,4 +59,7 @@ public class RagChunk {
 
     public LocalDateTime getCreatedDt() { return createdDt; }
     public void setCreatedDt(LocalDateTime createdDt) { this.createdDt = createdDt; }
+
+    public float getScore() { return score; }
+    public void setScore(float score) { this.score = score; }
 }

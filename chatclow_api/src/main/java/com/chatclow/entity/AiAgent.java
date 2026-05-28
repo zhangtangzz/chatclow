@@ -42,6 +42,23 @@ public class AiAgent {
     // 绑定的知识库ID
     private Long kbId;
 
+    // ===== 搜索增强引擎配置 =====
+
+    // 检索返回条数（默认6）：双路检索取多少条候选
+    private Integer ragTopK;
+
+    // 最终上下文条数（默认3）：Re-rank 后保留多少条送给 LLM
+    private Integer ragFinalK;
+
+    // 向量相似度阈值（默认0.5）：低于此值的切片认为不相关
+    private Float ragSimilarityThreshold;
+
+    // 是否启用关键字检索（默认1）：0=仅向量检索，1=双路检索
+    private Integer ragKeywordEnabled;
+
+    // 是否启用 Re-rank 重排序（默认1）：0=关闭，1=开启
+    private Integer ragRerankEnabled;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdDt;
 

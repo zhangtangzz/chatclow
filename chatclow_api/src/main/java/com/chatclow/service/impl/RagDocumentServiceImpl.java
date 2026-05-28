@@ -5,8 +5,9 @@ import com.chatclow.entity.RagChunk;
 import com.chatclow.entity.RagDocument;
 import com.chatclow.mapper.RagDocumentMapper;
 import com.chatclow.service.EmbeddingService;
-import com.chatclow.service.RagChunkService;
 import com.chatclow.service.RagDocumentService;
+import com.chatclow.storage.vector.ChatClowVectorStore;
+import com.chatclow.storage.vector.VectorStoreFactory;
 import com.chatclow.util.ChunkSplitUtil;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
@@ -15,7 +16,6 @@ import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
-
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -23,8 +23,14 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.List;
+
+/**
+ * 文档上传-处理-查重-保存
+ *
+ */
 
 @Service
 public class RagDocumentServiceImpl implements RagDocumentService {
@@ -33,10 +39,10 @@ public class RagDocumentServiceImpl implements RagDocumentService {
     private RagDocumentMapper ragDocumentMapper;
 
     @Autowired
-    private RagChunkService ragChunkService;
+    private EmbeddingService embeddingService;
 
     @Autowired
-    private EmbeddingService embeddingService;
+    private VectorStoreFactory vectorStoreFactory;
 
     @Override
     public boolean add(RagDocument document) {
@@ -67,7 +73,8 @@ public class RagDocumentServiceImpl implements RagDocumentService {
     }
 
     /**
-     * 文档处理全链路：切片 → 向量化 → 存储
+     * 文档处理全链路：切片 → 去重 → 向量化 → 存储
+     * 存储：通过 VectorStoreFactory 路由到对应后端（MySQL / PG / MongoDB）
      */
     @Override
     public void processDocument(Long documentId) {
@@ -85,38 +92,74 @@ public class RagDocumentServiceImpl implements RagDocumentService {
         if (textChunks.isEmpty()) {
             throw new RuntimeException("切片结果为空");
         }
-
         System.out.println("[RAG] 文档切成 " + textChunks.size() + " 个片段");
 
-        // 3. 批量向量化（一次 API 调用把所有切片都转成向量）
-        List<float[]> embeddings = embeddingService.batchEmbed(textChunks);
+        // 3. ★ 通过 VectorStoreFactory 获取该知识库对应的向量存储后端
+        Long kbId = document.getKbId();
+        ChatClowVectorStore vectorStore = vectorStoreFactory.getVectorStore(kbId);
+        System.out.println("[RAG] 知识库 " + kbId + " 使用向量存储: " + vectorStore.getClass().getSimpleName());
 
-        // 4. 组装 Chunk 对象并存入数据库
+        // 4. ★ 去重过滤：通过 SPI 接口查询后端是否已有该内容
+        List<String> uniqueChunks = new ArrayList<>();
+        List<String> uniqueHashes = new ArrayList<>();
+        int skippedCount = 0;
+
+        for (String chunkContent : textChunks) {
+            String hash = sha256(chunkContent);
+
+            // 通过 SPI 接口查询去重（MySQL 查 chatclow_rag_chunk，PG 查 rag_vectors）
+            if (vectorStore.existsByHash(kbId, hash)) {
+                skippedCount++;
+                System.out.println("[RAG-Dedup] 跳过重复切片，hash=" + hash.substring(0, 8) + "...");
+                continue;
+            }
+
+            uniqueChunks.add(chunkContent);
+            uniqueHashes.add(hash);
+        }
+        System.out.println("[RAG-Dedup] 去重完成：跳过 " + skippedCount + " 个，剩余 " + uniqueChunks.size() + " 个待向量化");
+
+        if (uniqueChunks.isEmpty()) {
+            document.setChunkCount(0);
+            document.setStatus(3);
+            ragDocumentMapper.updateById(document);
+            System.out.println("[RAG-Dedup] 所有切片都是重复的，无需处理");
+            return;
+        }
+
+        // 5. 批量向量化
+        List<float[]> embeddings = embeddingService.batchEmbed(uniqueChunks);
+
+        // 6. 组装 Chunk 对象
         List<RagChunk> chunks = new ArrayList<>();
-        for (int i = 0; i < textChunks.size(); i++) {
+        for (int i = 0; i < uniqueChunks.size(); i++) {
             RagChunk chunk = new RagChunk();
-            chunk.setKbId(document.getKbId());
+            chunk.setKbId(kbId);
             chunk.setDocumentId(document.getId());
             chunk.setChunkIndex(i);
-            chunk.setContent(textChunks.get(i));
-            chunk.setTokenCount(textChunks.get(i).length());
+            chunk.setContent(uniqueChunks.get(i));
+            chunk.setTokenCount(uniqueChunks.get(i).length());
+            chunk.setContentHash(uniqueHashes.get(i));
 
-            // 把 float[] 转成字符串存储（逗号分隔）
             String vectorStr = arrayToString(embeddings.get(i));
             chunk.setVectorData(vectorStr);
 
             chunks.add(chunk);
         }
 
-        // 5. 批量插入 chunk 表
-        ragChunkService.batchInsert(chunks);
+        // 7. ★ 通过 SPI 接口写入对应后端（MySQL / PG / MongoDB）
+        boolean storeResult = vectorStore.addBatch(chunks);
+        if (!storeResult) {
+            throw new RuntimeException("向量写入失败，后端: " + vectorStore.getClass().getSimpleName());
+        }
+        System.out.println("[RAG] 向量已写入 " + vectorStore.getClass().getSimpleName() + "，共 " + chunks.size() + " 条");
 
-        // 6. 更新文档的切片数量和状态
+        // 8. 更新文档的切片数量和状态
         document.setChunkCount(chunks.size());
-        document.setStatus(3);  // 处理完成（3=完成，1=解析中）
+        document.setStatus(3);  // 处理完成
         ragDocumentMapper.updateById(document);
 
-        System.out.println("[RAG] 文档处理完成！共生成 " + chunks.size() + " 条切片记录");
+        System.out.println("[RAG] 文档处理完成！去重后入库 " + chunks.size() + " 条切片（跳过重复 " + skippedCount + " 条）");
     }
 
     /**
@@ -288,5 +331,37 @@ public class RagDocumentServiceImpl implements RagDocumentService {
         int dot = fileName.lastIndexOf('.');
         return dot >= 0 ? fileName.substring(dot + 1) : "";
     }
+
+    /**
+     * 计算文本的 SHA-256 哈希值
+     * 作用：给一段文字算一个"指纹"，相同文字的指纹一定相同
+     */
+    private String sha256(String text) {
+        try {
+            // 第一步：拿到一个 SHA-256 的"计算器"
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+
+            // 第二步：把文字转成字节数组，喂给计算器
+            //         UTF-8 是文字编码方式，保证中文也能正确处理
+            byte[] hashBytes = digest.digest(text.getBytes(StandardCharsets.UTF_8));
+
+            // 第三步：把字节数组转成 16 进制字符串
+            //         （因为字节是 -128~127 的数字，人看不懂，转成 00~ff 才好存数据库）
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hashBytes) {
+                // 0xff & b 的作用：把 Java 的有符号 byte 转成无符号的 0~255
+                String hex = Integer.toHexString(0xff & b);
+                // 如果只有一位（比如 0x0f），前面补个 0 变成 "0f"，保持对齐
+                if (hex.length() == 1) hexString.append('0');
+                hexString.append(hex);
+            }
+            return hexString.toString();  // 最终得到 64 位长的 16 进制字符串
+
+        } catch (Exception e) {
+            // SHA-256 是 JDK 自带的，正常情况不会进这个 catch
+            throw new RuntimeException("SHA-256 计算失败", e);
+        }
+    }
+
 
 }

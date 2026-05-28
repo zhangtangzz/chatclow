@@ -15,6 +15,11 @@ export function deleteKb(id) {
   return request.delete(`/kb/delete/${id}`)
 }
 
+// 更新知识库
+export function updateKb(id, data) {
+  return request.put(`/kb/update/${id}`, data)
+}
+
 // 上传文档到知识库
 export function uploadDocument(file, kbId) {
   const formData = new FormData()

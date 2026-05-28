@@ -35,6 +35,14 @@ public class AiModelServiceImpl implements AiModelService {
     }
 
     @Override
+    public List<AiModel> listAll() {
+        return aiModelMapper.selectList(
+                new LambdaQueryWrapper<AiModel>()
+                        .orderByDesc(AiModel::getCreatedDt)
+        );
+    }
+
+    @Override
     public AiModel getById(Long id) {
         return aiModelMapper.selectById(id);
     }

@@ -16,6 +16,11 @@ public interface AiAgentService {
     List<AiAgent> listByUserId(Long userId);
 
     /**
+     * 查询所有智能体（管理员用，含禁用）
+     */
+    List<AiAgent> listAll();
+
+    /**
      * 查询所有启用的智能体（管理员用）
      */
     List<AiAgent> listAllEnabled();

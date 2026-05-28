@@ -1,12 +1,22 @@
 package com.chatclow.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import java.time.LocalDateTime;
 
+
 @TableName("chatclow_rag_kb")
 public class RagKnowledgeBase {
+
+    /** 向量存储实例ID（外键关联 store_instance.id） */
+    @TableField("store_instance_id")
+    private Long storeInstanceId;
+
+    /** 向量存储类型（冗余字段，方便查询） */
+    private String vectorStoreType;
+
 
     @TableId(type = IdType.AUTO)
     private Long id;
@@ -57,4 +67,13 @@ public class RagKnowledgeBase {
 
     public LocalDateTime getUpdatedDt() { return updatedDt; }
     public void setUpdatedDt(LocalDateTime updatedDt) { this.updatedDt = updatedDt; }
+
+    public Long getStoreInstanceId() { return storeInstanceId; }
+    public void setStoreInstanceId(Long storeInstanceId) { this.storeInstanceId = storeInstanceId; }
+
+    public String getVectorStoreType() { return vectorStoreType; }
+    public void setVectorStoreType(String vectorStoreType) { this.vectorStoreType = vectorStoreType; }
+
+
+
 }

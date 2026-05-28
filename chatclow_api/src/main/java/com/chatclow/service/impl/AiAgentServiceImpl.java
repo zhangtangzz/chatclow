@@ -34,6 +34,14 @@ public class AiAgentServiceImpl implements AiAgentService {
     }
 
     @Override
+    public List<AiAgent> listAll() {
+        return aiAgentMapper.selectList(
+                new LambdaQueryWrapper<AiAgent>()
+                        .orderByDesc(AiAgent::getCreatedDt)
+        );
+    }
+
+    @Override
     public List<AiAgent> listAllEnabled() {
         return aiAgentMapper.selectList(
                 new LambdaQueryWrapper<AiAgent>()

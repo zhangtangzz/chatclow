@@ -47,6 +47,16 @@ public class AiModelController {
     }
 
     /**
+     * 管理员查询所有模型（含禁用）
+     * GET /api/model/admin/list
+     */
+    @GetMapping("/admin/list")
+    public R<List<AiModel>> adminList() {
+        List<AiModel> list = aiModelService.listAll();
+        return R.ok("查询成功", list);
+    }
+
+    /**
      * 根据ID查询
      * GET /api/model/{id}
      */

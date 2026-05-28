@@ -9,7 +9,7 @@ const routes = [
   {
     path: '/',
     name: 'Chat',
-    component: () => import('../views/Chat.vue'),
+    component: () => import('../views/chat.vue'),
     meta: { requiresAuth: true }
   },
   {
@@ -17,6 +17,12 @@ const routes = [
     name: 'Knowledge',
     component: () => import('../views/Knowledge.vue'),
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/admin',
+    name: 'Admin',
+    component: () => import('../views/Admin.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true }
   }
 ]
 
@@ -25,13 +31,22 @@ const router = createRouter({
   routes
 })
 
-// 路由守卫：未登录跳转登录页
+// 路由守卫：
+// 1. 未登录 → 跳转 /login
+// 2. 非管理员访问 /admin → 跳转 /
+// 3. 已登录访问 /login → 根据 role 跳转对应首页
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('token')
+  const role = Number(localStorage.getItem('role'))
+
   if (to.meta.requiresAuth && !token) {
     next('/login')
-  } else if (to.path === '/login' && token) {
+  } else if (to.meta.requiresAdmin && role !== 2) {
+    // 非管理员禁止访问管理后台
     next('/')
+  } else if (to.path === '/login' && token) {
+    // 已登录，根据角色跳转
+    next(role === 2 ? '/admin' : '/')
   } else {
     next()
   }

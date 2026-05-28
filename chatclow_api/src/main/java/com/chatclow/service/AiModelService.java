@@ -16,6 +16,11 @@ public interface AiModelService {
     List<AiModel> listEnabled();
 
     /**
+     * 查询所有模型（管理员用）
+     */
+    List<AiModel> listAll();
+
+    /**
      * 根据ID查询模型
      */
     AiModel getById(Long id);
