@@ -36,7 +36,6 @@ public class User {
     private  String password;
 
     //角色：1=普通用户，2=管理员
-    @NotNull(message = "角色不能为空")
     private Integer role;
 
     //使用额度

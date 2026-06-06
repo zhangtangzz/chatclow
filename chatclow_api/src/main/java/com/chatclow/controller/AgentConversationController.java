@@ -38,4 +38,24 @@ public class AgentConversationController {
         List<AgentConversation> list = agentConversationService.listByUserId(userId);
         return R.ok(list);
     }
+
+    /**
+     * 删除会话（含所有聊天记录）
+     * DELETE /api/conversation/delete/{id}
+     */
+    @DeleteMapping("/delete/{id}")
+    public R<Void> delete(@PathVariable Long id) {
+        agentConversationService.deleteConversation(id);
+        return R.ok("删除成功", null);
+    }
+
+    /**
+     * 清除会话记忆（删除聊天记录，保留会话）
+     * DELETE /api/conversation/memory/{convId}
+     */
+    @DeleteMapping("/memory/{convId}")
+    public R<Void> clearMemory(@PathVariable Long convId) {
+        agentConversationService.clearMemory(convId);
+        return R.ok("记忆已清除", null);
+    }
 }

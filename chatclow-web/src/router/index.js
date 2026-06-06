@@ -19,6 +19,12 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
+    path: '/token-stats',
+    name: 'TokenStats',
+    component: () => import('../views/TokenStats.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/admin',
     name: 'Admin',
     component: () => import('../views/Admin.vue'),

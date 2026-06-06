@@ -1,11 +1,15 @@
 package com.chatclow.service.impl;
 
 import com.chatclow.entity.AgentConversation;
+import com.chatclow.entity.AgentConversationRecord;
 import com.chatclow.mapper.AgentConversationMapper;
+import com.chatclow.mapper.AgentConversationRecordMapper;
 import com.chatclow.service.AgentConversationService;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import org.apache.ibatis.annotations.Mapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -13,6 +17,9 @@ import java.util.List;
 public class AgentConversationServiceImpl
         extends ServiceImpl<AgentConversationMapper, AgentConversation>
         implements AgentConversationService {
+
+    @Autowired
+    private AgentConversationRecordMapper recordMapper;
 
     @Override
     public AgentConversation createConversation(Long userId, String title) {
@@ -29,5 +36,20 @@ public class AgentConversationServiceImpl
                 .eq(AgentConversation::getUserId, userId)
                 .orderByDesc(AgentConversation::getCreatedDt)
                 .list();
+    }
+
+    @Override
+    @Transactional
+    public void deleteConversation(Long id) {
+        recordMapper.delete(new LambdaQueryWrapper<AgentConversationRecord>()
+                .eq(AgentConversationRecord::getConversationId, id));
+        this.removeById(id);
+    }
+
+    @Override
+    @Transactional
+    public void clearMemory(Long convId) {
+        recordMapper.delete(new LambdaQueryWrapper<AgentConversationRecord>()
+                .eq(AgentConversationRecord::getConversationId, convId));
     }
 }

@@ -2,13 +2,13 @@ package com.chatclow.controller;
 
 import com.chatclow.common.R;
 import com.chatclow.entity.AiAgent;
-import com.chatclow.entity.User;
 import com.chatclow.mapper.UserMapper;
 import com.chatclow.service.AiAgentService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
 import java.util.HashMap;
 import java.util.List;
@@ -28,11 +28,30 @@ public class AiAgentController {
     private UserMapper userMapper;
 
     /**
+     * 检查当前用户是否是管理员
+     */
+    private boolean isAdmin(Long userId) {
+        if (userId == null) return false;
+        com.chatclow.entity.User user = userMapper.selectById(userId);
+        return user != null && user.getRole() != null && user.getRole() == 2;
+    }
+
+    /**
+     * 检查是否有权限操作该智能体（管理员或创建者）
+     */
+    private boolean canManage(AiAgent agent, Long userId) {
+        if (userId == null) return false;
+        return isAdmin(userId) || userId.equals(agent.getUserId());
+    }
+
+    /**
      * 新增智能体
      * POST /api/agent/add
      */
     @PostMapping("/add")
-    public R<Void> add(@RequestBody @Valid AiAgent aiAgent) {
+    public R<Void> add(@RequestBody @Valid AiAgent aiAgent, HttpServletRequest request) {
+        Long userId = (Long) request.getAttribute("userId");
+        aiAgent.setUserId(userId);
         boolean success = aiAgentService.add(aiAgent);
         if (success) {
             return R.ok("智能体创建成功!", null);
@@ -41,21 +60,12 @@ public class AiAgentController {
     }
 
     /**
-     * 查询用户的智能体列表
+     * 查询智能体列表（每人只能看到自己创建的）
      * GET /api/agent/list/{userId}
-     * 管理员(role=2)返回所有智能体，普通用户只返回自己的
      */
     @GetMapping("/list/{userId}")
     public R<List<AiAgent>> listByUserId(@PathVariable Long userId) {
-        User user = userMapper.selectById(userId);
-        List<AiAgent> list;
-        if (user != null && user.getRole() != null && user.getRole() == 2) {
-            // 管理员：返回所有启用的智能体
-            list = aiAgentService.listAllEnabled();
-        } else {
-            // 普通用户：只返回自己的
-            list = aiAgentService.listByUserId(userId);
-        }
+        List<AiAgent> list = aiAgentService.listByUserId(userId);
         return R.ok("查询成功", list);
     }
 
@@ -87,7 +97,17 @@ public class AiAgentController {
      * PUT /api/agent/update
      */
     @PutMapping("/update")
-    public R<Void> update(@RequestBody @Valid AiAgent aiAgent) {
+    public R<Void> update(@RequestBody @Valid AiAgent aiAgent, HttpServletRequest request) {
+        Long userId = (Long) request.getAttribute("userId");
+        AiAgent existing = aiAgentService.getById(aiAgent.getId());
+        if (existing == null) {
+            return R.error("智能体不存在");
+        }
+        if (!canManage(existing, userId)) {
+            return R.error(403, "无权修改该智能体");
+        }
+        // 保留原始创建者
+        aiAgent.setUserId(existing.getUserId());
         boolean success = aiAgentService.update(aiAgent);
         if (success) {
             return R.ok("更新成功!", null);
@@ -100,7 +120,15 @@ public class AiAgentController {
      * DELETE /api/agent/delete/{id}
      */
     @DeleteMapping("/delete/{id}")
-    public R<Void> delete(@PathVariable Long id) {
+    public R<Void> delete(@PathVariable Long id, HttpServletRequest request) {
+        Long userId = (Long) request.getAttribute("userId");
+        AiAgent existing = aiAgentService.getById(id);
+        if (existing == null) {
+            return R.error("智能体不存在");
+        }
+        if (!canManage(existing, userId)) {
+            return R.error(403, "无权删除该智能体");
+        }
         boolean success = aiAgentService.deleteById(id);
         if (success) {
             return R.ok("删除成功!", null);
@@ -113,7 +141,15 @@ public class AiAgentController {
      * PUT /api/agent/status/{id}
      */
     @PutMapping("/status/{id}")
-    public R<Map<String, Object>> toggleStatus(@PathVariable Long id) {
+    public R<Map<String, Object>> toggleStatus(@PathVariable Long id, HttpServletRequest request) {
+        Long userId = (Long) request.getAttribute("userId");
+        AiAgent existing = aiAgentService.getById(id);
+        if (existing == null) {
+            return R.error("智能体不存在");
+        }
+        if (!canManage(existing, userId)) {
+            return R.error(403, "无权修改该智能体");
+        }
         Integer newStatus = aiAgentService.toggleStatus(id);
         Map<String, Object> data = new HashMap<>();
         data.put("newStatus", newStatus);

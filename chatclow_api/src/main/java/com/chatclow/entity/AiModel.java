@@ -36,6 +36,10 @@ public class AiModel {
     // 状态：0=禁用，1=启用（有默认值，不强制要求前端传）
     private Integer status;
 
+    private Double temperature;
+    private Integer maxTokens;
+    private Double topP;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdDt;
 }

@@ -2,6 +2,9 @@ package com.chatclow.controller;
 
 import com.chatclow.common.R;
 import com.chatclow.entity.RagDocument;
+import com.chatclow.entity.RagKnowledgeBase;
+import com.chatclow.mapper.RagKnowledgeBaseMapper;
+import com.chatclow.mapper.UserMapper;
 import com.chatclow.service.RagDocumentService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -9,6 +12,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RequestParam;
 
+import javax.servlet.http.HttpServletRequest;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -20,6 +24,25 @@ public class RagDocumentController {
 
     @Autowired
     private RagDocumentService ragDocumentService;
+
+    @Autowired
+    private RagKnowledgeBaseMapper ragKnowledgeBaseMapper;
+
+    @Autowired
+    private UserMapper userMapper;
+
+    /**
+     * 检查当前用户是否有权限操作该知识库
+     */
+    private boolean canManageKb(Long kbId, Long userId) {
+        if (userId == null) return false;
+        // 检查是否是管理员
+        com.chatclow.entity.User user = userMapper.selectById(userId);
+        if (user != null && user.getRole() != null && user.getRole() == 2) return true;
+        // 检查是否是知识库创建者
+        RagKnowledgeBase kb = ragKnowledgeBaseMapper.selectById(kbId);
+        return kb != null && userId.equals(kb.getUserId());
+    }
 
     /**
      * 新增文档记录
@@ -67,7 +90,15 @@ public class RagDocumentController {
      * DELETE /api/document/delete/{id}
      */
     @DeleteMapping("/delete/{id}")
-    public R<String> delete(@PathVariable Long id) {
+    public R<String> delete(@PathVariable Long id, HttpServletRequest request) {
+        Long userId = (Long) request.getAttribute("userId");
+
+        // 查出文档所属知识库，检查权限
+        RagDocument doc = ragDocumentService.getById(id);
+        if (doc != null && !canManageKb(doc.getKbId(), userId)) {
+            return R.error(403, "无权删除该文档");
+        }
+
         ragDocumentService.deleteById(id);
         return R.ok("删除成功");
     }
@@ -93,7 +124,12 @@ public class RagDocumentController {
      */
     @PostMapping("/upload")
     public R<Object> upload(@RequestPart("file") MultipartFile file,
-                            @RequestParam("kbId") Long kbId) {
+                            @RequestParam("kbId") Long kbId,
+                            HttpServletRequest request) {
+        Long userId = (Long) request.getAttribute("userId");
+        if (!canManageKb(kbId, userId)) {
+            return R.error(403, "无权向该知识库上传文档");
+        }
         Long documentId = ragDocumentService.uploadAndProcess(file, kbId);
         return R.ok(documentId);
     }

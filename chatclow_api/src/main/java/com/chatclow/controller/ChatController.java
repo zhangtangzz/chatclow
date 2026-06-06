@@ -2,7 +2,6 @@ package com.chatclow.controller;
 
 import com.chatclow.common.R;
 import com.chatclow.service.ChatService;
-import com.chatclow.util.ChunkSplitUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.bind.annotation.*;
@@ -10,7 +9,7 @@ import com.chatclow.dto.ChatRequest;
 import com.chatclow.dto.ChatResponse;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import java.util.List;
+import javax.servlet.http.HttpServletResponse;
 import java.util.concurrent.Executor;
 
 /**
@@ -38,7 +37,8 @@ public class ChatController {
                 request.getAgentId(),
                 request.getUserId(),
                 request.getMessage(),
-                request.getConversationId()
+                request.getConversationId(),
+                request.isMemoryEnabled()
         );
         return R.ok(response);
     }
@@ -47,7 +47,10 @@ public class ChatController {
      * SSE 流式对话 — 前端用 EventSource 连接此端点
      */
     @PostMapping("/send-stream")
-    public SseEmitter sendStream(@RequestBody ChatRequest request) {
+    public SseEmitter sendStream(@RequestBody ChatRequest request, HttpServletResponse response) {
+        // 禁用响应缓冲，确保每个 token 立即推送到客户端
+        response.setBufferSize(0);
+
         SseEmitter emitter = new SseEmitter(120000L); // 120秒超时
 
         // 在另一个线程中执行，避免阻塞主线程
@@ -57,19 +60,11 @@ public class ChatController {
                     request.getUserId(),
                     request.getMessage(),
                     request.getConversationId(),
+                    request.isMemoryEnabled(),
                     emitter
             );
         });
 
         return emitter; // 立即返回 emitter，数据后续通过它推送
     }
-
-
-    // 临时测试接口，测完删掉
-    @PostMapping("/test-chunk")
-    public R<List<String>> testChunk(@RequestBody String text) {
-        List<String> chunks = ChunkSplitUtil.split(text);
-        return R.ok(chunks);
-    }
-
 }

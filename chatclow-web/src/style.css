@@ -1,3 +1,36 @@
+/* ============================================================
+   ChatClow Design System — Handwritten Sketch (手绘白板笔记)
+   ============================================================ */
+
+/* ---- CSS Custom Properties ---- */
+:root {
+  /* 色彩系统 */
+  --bg-page: #fdfbf7;
+  --bg-card: #ffffff;
+  --fg-default: #2d2d2d;
+  --fg-muted: rgba(45, 45, 45, 0.6);
+  --primary: #ff4d4d;
+  --primary-hover: #e63939;
+  --accent: #2d5da1;
+  --accent-hover: #1e4278;
+  --success: #16a34a;
+  --warning: #facc15;
+  --danger: #ff4d4d;
+  --border-color: #2d2d2d;
+  --sidebar-bg: #f8f6f0;
+  --sidebar-hover: rgba(45, 45, 45, 0.06);
+
+  /* 硬阴影 */
+  --shadow-hard: 4px 4px 0px 0px #2d2d2d;
+  --shadow-hard-sm: 2px 2px 0px 0px #2d2d2d;
+  --shadow-hard-lg: 8px 8px 0px 0px #2d2d2d;
+
+  /* 字体 */
+  --font-marker: 'Kalam', cursive;
+  --font-hand: 'Patrick Hand', cursive;
+}
+
+/* ---- Reset & Base ---- */
 * {
   margin: 0;
   padding: 0;
@@ -6,7 +39,10 @@
 
 html, body {
   height: 100%;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family: var(--font-hand);
+  font-size: 16px;
+  color: var(--fg-default);
+  background: var(--bg-page);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -15,15 +51,190 @@ html, body {
   height: 100%;
 }
 
-::-webkit-scrollbar {
-  width: 6px;
+/* ---- Wobbly Border-Radius Presets ---- */
+.wobbly-1 { border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; }
+.wobbly-2 { border-radius: 20px 225px 15px 255px / 255px 15px 225px 15px; }
+.wobbly-3 { border-radius: 15px 225px 15px 255px / 255px 15px 225px 15px; }
+.wobbly-4 { border-radius: 225px 15px 225px 15px / 15px 225px 15px 255px; }
+
+/* ---- Scrollbar ---- */
+::-webkit-scrollbar { width: 12px; }
+::-webkit-scrollbar-track { background: var(--bg-page); border-left: 3px solid var(--border-color); }
+::-webkit-scrollbar-thumb { background: var(--border-color); border: 3px solid var(--bg-page); border-radius: 0; }
+::-webkit-scrollbar-thumb:hover { background: var(--primary); }
+
+/* ============================================================
+   Element Plus Global Overrides
+   ============================================================ */
+
+/* -- Button -- */
+.el-button {
+  font-family: var(--font-hand) !important;
+  border: 3px solid var(--border-color) !important;
+  border-radius: 0 !important;
+  box-shadow: var(--shadow-hard-sm) !important;
+  transition: all 0.2s ease-out !important;
+  height: auto !important;
+  padding: 8px 18px !important;
+}
+.el-button:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: var(--shadow-hard) !important;
+}
+.el-button:active {
+  transform: translateY(0) !important;
+  box-shadow: var(--shadow-hard-sm) !important;
+}
+.el-button--primary {
+  background: var(--primary) !important;
+  border-color: var(--border-color) !important;
+  color: #fff !important;
+}
+.el-button--primary:hover {
+  background: var(--primary-hover) !important;
+}
+.el-button--text {
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+.el-button--text:hover {
+  border-color: transparent !important;
+}
+.el-button.is-disabled {
+  opacity: 0.4 !important;
+  box-shadow: none !important;
 }
 
-::-webkit-scrollbar-thumb {
-  background: #c0c4cc;
-  border-radius: 3px;
+/* -- Input -- */
+.el-input__wrapper {
+  border: 3px solid var(--border-color) !important;
+  border-radius: 0 !important;
+  box-shadow: var(--shadow-hard-sm) !important;
+  background: var(--bg-card) !important;
+  font-family: var(--font-hand) !important;
+}
+.el-input__wrapper.is-focus {
+  border-color: var(--primary) !important;
+  box-shadow: var(--shadow-hard) !important;
+}
+.el-input__inner {
+  font-family: var(--font-hand) !important;
+  color: var(--fg-default) !important;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #909399;
+/* -- Select -- */
+.el-select .el-input__wrapper {
+  border-radius: 0 !important;
+}
+.el-select-dropdown__item {
+  font-family: var(--font-hand) !important;
+}
+
+/* -- Input Number -- */
+.el-input-number .el-input__wrapper {
+  border-radius: 0 !important;
+}
+
+/* -- Table -- */
+.el-table {
+  border: 3px solid var(--border-color) !important;
+  border-radius: 0 !important;
+  font-family: var(--font-hand) !important;
+}
+.el-table th.el-table__cell {
+  background: var(--sidebar-bg) !important;
+  border-bottom: 3px solid var(--border-color) !important;
+  font-family: var(--font-marker) !important;
+  color: var(--fg-default) !important;
+}
+.el-table td.el-table__cell {
+  border-bottom: 2px solid rgba(45, 45, 45, 0.15) !important;
+}
+.el-table__body tr:hover > td.el-table__cell {
+  background-color: #fef5d4 !important;
+}
+.el-table__body tr.el-table__row--striped td.el-table__cell {
+  background: #f8f6f0 !important;
+}
+.el-table__body tr.el-table__row--striped:hover > td.el-table__cell {
+  background: #fef5d4 !important;
+}
+
+/* -- Dialog -- */
+.el-dialog {
+  border: 3px solid var(--border-color) !important;
+  border-radius: 0 !important;
+  box-shadow: var(--shadow-hard-lg) !important;
+}
+.el-dialog__header {
+  font-family: var(--font-marker) !important;
+  border-bottom: 3px solid var(--border-color) !important;
+  padding: 20px 24px !important;
+}
+.el-dialog__body {
+  padding: 24px !important;
+}
+.el-dialog__footer {
+  border-top: 3px solid var(--border-color) !important;
+  padding: 16px 24px !important;
+}
+
+/* -- Tag -- */
+.el-tag {
+  border: 2px solid var(--border-color) !important;
+  border-radius: 0 !important;
+  font-family: var(--font-hand) !important;
+}
+
+/* -- Switch -- */
+.el-switch__core {
+  border: 2px solid var(--border-color) !important;
+  height: 22px !important;
+  border-radius: 0 !important;
+}
+.el-switch.is-checked .el-switch__core {
+  background: var(--primary) !important;
+  border-color: var(--border-color) !important;
+}
+
+/* -- Message -- */
+.el-message {
+  border: 3px solid var(--border-color) !important;
+  border-radius: 0 !important;
+  box-shadow: var(--shadow-hard) !important;
+}
+
+/* -- Card -- */
+.el-card {
+  border: 3px solid var(--border-color) !important;
+  border-radius: 0 !important;
+  box-shadow: var(--shadow-hard) !important;
+}
+
+/* -- Dropdown -- */
+.el-popper {
+  border: 3px solid var(--border-color) !important;
+  border-radius: 0 !important;
+  box-shadow: var(--shadow-hard) !important;
+}
+.el-dropdown-menu__item {
+  font-family: var(--font-hand) !important;
+}
+.el-dropdown-menu__item:hover {
+  background: var(--sidebar-bg) !important;
+}
+
+/* -- Loading -- */
+.el-loading-spinner .circular { display: none; }
+.el-loading-spinner::after {
+  content: '加载中...';
+  font-family: var(--font-hand);
+  font-size: 16px;
+  color: var(--border-color);
+}
+
+/* -- Table empty -- */
+.el-table__empty-text {
+  font-family: var(--font-hand) !important;
+  color: var(--fg-muted) !important;
 }

@@ -10,7 +10,6 @@
       </div>
       <div class="header-right">
         <el-button
-          v-if="isAdmin"
           type="primary"
           :icon="Plus"
           @click="showAddDialog = true"
@@ -53,9 +52,18 @@
               >
                 {{ kb.status === 1 ? '已启用' : '已禁用' }}
               </el-tag>
+              <el-tag
+                v-if="kb.userId === userStore.userId"
+                size="small"
+                type="warning"
+                effect="plain"
+                round
+              >
+                我的
+              </el-tag>
             </div>
-            <!-- 管理员操作下拉菜单 -->
-            <el-dropdown v-if="isAdmin" trigger="click" class="card-actions">
+            <!-- 操作下拉菜单（管理员或创建者可见） -->
+            <el-dropdown v-if="canManage(kb)" trigger="click" class="card-actions">
               <el-button :icon="MoreFilled" size="small" text type="info" />
               <template #dropdown>
                 <el-dropdown-menu>
@@ -103,7 +111,7 @@
                 <el-icon><Document /></el-icon>
                 <span class="doc-name">{{ doc.fileName || doc.title || '文档' }}</span>
                 <el-button
-                  v-if="isAdmin"
+                  v-if="canManage(kb)"
                   :icon="Delete"
                   size="small"
                   text
@@ -295,6 +303,11 @@ const userStore = useUserStore()
 const isAdmin = computed(() => {
   return userStore.username === 'admin' || userStore.userId === 1
 })
+
+// 判断是否有管理权限（管理员或知识库创建者）
+function canManage(kb) {
+  return isAdmin.value || (kb.userId && kb.userId === userStore.userId)
+}
 
 const kbList = ref([])
 const showAddDialog = ref(false)
@@ -492,19 +505,17 @@ onMounted(() => {
 <style scoped>
 .kb-layout {
   min-height: 100vh;
-  background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
+  background: var(--bg-page);
 }
 
-/* 顶部导航 */
 .kb-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 20px 32px;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  background: var(--bg-card);
+  border-bottom: 3px solid var(--border-color);
+  box-shadow: var(--shadow-hard-sm);
   position: sticky;
   top: 0;
   z-index: 100;
@@ -516,49 +527,19 @@ onMounted(() => {
   gap: 20px;
 }
 
-.back-btn {
-  border: none;
-  background: #f4f4f5;
-  color: #606266;
-  padding: 8px 16px;
-  border-radius: 8px;
-  transition: all 0.3s;
-}
-
-.back-btn:hover {
-  background: #e9e9eb;
-  color: #409eff;
-}
-
 .page-title {
   margin: 0;
+  font-family: var(--font-marker);
   font-size: 22px;
-  font-weight: 600;
-  color: #303133;
-  letter-spacing: -0.5px;
+  color: var(--fg-default);
 }
 
-.create-btn {
-  padding: 10px 20px;
-  border-radius: 10px;
-  font-weight: 500;
-  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.3);
-  transition: all 0.3s;
-}
-
-.create-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(64, 158, 255, 0.4);
-}
-
-/* 内容区域 */
 .kb-content {
   padding: 32px;
   max-width: 1400px;
   margin: 0 auto;
 }
 
-/* 空状态 */
 .empty-state {
   display: flex;
   flex-direction: column;
@@ -569,45 +550,37 @@ onMounted(() => {
 
 .empty-text {
   font-size: 18px;
-  color: #909399;
+  color: var(--fg-muted);
   margin-top: 20px;
 }
 
 .empty-hint {
   font-size: 14px;
-  color: #c0c4cc;
+  color: var(--fg-muted);
   margin-top: 8px;
+  opacity: 0.7;
 }
 
-/* 知识库网格 */
 .kb-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
   gap: 24px;
 }
 
-/* 知识库卡片 */
 .kb-card {
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(10px);
-  border-radius: 16px;
+  background: var(--bg-card);
+  border: 3px solid var(--border-color);
+  box-shadow: var(--shadow-hard);
   padding: 24px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  border: 1px solid rgba(0, 0, 0, 0.04);
+  transition: all 0.2s ease-out;
+  border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
 }
 
 .kb-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.1);
-  border-color: rgba(64, 158, 255, 0.3);
+  box-shadow: var(--shadow-hard-lg);
 }
 
-.kb-card.is-admin:hover {
-  border-color: rgba(64, 158, 255, 0.3);
-}
-
-/* 卡片头部 */
 .card-header {
   display: flex;
   align-items: flex-start;
@@ -618,11 +591,12 @@ onMounted(() => {
 .kb-icon {
   width: 48px;
   height: 48px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   display: flex;
   align-items: center;
   justify-content: center;
+  background: var(--primary);
+  border: 3px solid var(--border-color);
+  box-shadow: var(--shadow-hard-sm);
   color: #fff;
   flex-shrink: 0;
 }
@@ -634,26 +608,22 @@ onMounted(() => {
 
 .kb-name {
   margin: 0 0 8px 0;
+  font-family: var(--font-marker);
   font-size: 17px;
-  font-weight: 600;
-  color: #303133;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  color: var(--fg-default);
 }
 
 .card-actions {
   flex-shrink: 0;
 }
 
-/* 卡片主体 */
 .card-body {
   margin-bottom: 16px;
 }
 
 .kb-desc {
   font-size: 14px;
-  color: #909399;
+  color: var(--fg-muted);
   line-height: 1.6;
   margin: 0 0 12px 0;
   display: -webkit-box;
@@ -666,9 +636,8 @@ onMounted(() => {
   margin-top: 8px;
 }
 
-/* 卡片底部 */
 .card-footer {
-  border-top: 1px solid #f0f0f0;
+  border-top: 3px solid var(--border-color);
   padding-top: 16px;
 }
 
@@ -683,15 +652,17 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  background: #f9fafb;
-  border-radius: 8px;
+  background: var(--bg-page);
+  border: 2px solid var(--border-color);
+  box-shadow: var(--shadow-hard-sm);
   font-size: 13px;
-  color: #606266;
+  color: var(--fg-default);
   transition: all 0.2s;
 }
 
 .doc-item:hover {
-  background: #f0f2f5;
+  transform: translateX(2px);
+  box-shadow: var(--shadow-hard);
 }
 
 .doc-name {
@@ -703,52 +674,29 @@ onMounted(() => {
 
 .doc-more {
   font-size: 12px;
-  color: #909399;
+  color: var(--fg-muted);
   padding: 4px 12px;
 }
 
 .view-docs-btn {
-  color: #409eff;
   font-size: 13px;
 }
 
 .doc-count {
   font-size: 13px;
-  color: #909399;
+  color: var(--fg-muted);
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-/* 对话框样式 */
-.kb-dialog :deep(.el-dialog) {
-  border-radius: 16px;
-}
-
-.kb-dialog :deep(.el-dialog__header) {
-  padding: 24px 24px 0;
-}
-
-.kb-dialog :deep(.el-dialog__body) {
-  padding: 24px;
-}
-
-.kb-form {
-  margin-top: 16px;
-}
-
 .form-hint {
   font-size: 12px;
-  color: #909399;
+  color: var(--fg-muted);
   margin-top: 6px;
   display: flex;
   align-items: center;
   gap: 4px;
-}
-
-/* 上传对话框 */
-.upload-dialog :deep(.el-dialog__body) {
-  padding: 24px;
 }
 
 .upload-target {
@@ -756,56 +704,52 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   padding: 12px 16px;
-  background: #f0f9ff;
-  border-radius: 10px;
+  background: var(--sidebar-bg);
+  border: 3px solid var(--border-color);
+  box-shadow: var(--shadow-hard-sm);
   margin-bottom: 20px;
-  color: #409eff;
   font-size: 14px;
-}
-
-.upload-area {
-  margin-bottom: 20px;
+  color: var(--fg-default);
 }
 
 .upload-area :deep(.el-upload-dragger) {
-  border-radius: 12px;
-  border: 2px dashed #dcdfe6;
-  transition: all 0.3s;
+  border: 3px solid var(--border-color);
+  box-shadow: var(--shadow-hard-sm);
+  background: var(--bg-card);
+  transition: all 0.2s;
 }
 
 .upload-area :deep(.el-upload-dragger:hover) {
-  border-color: #409eff;
-  background: #f0f9ff;
+  border-color: var(--primary);
+  box-shadow: var(--shadow-hard);
+  background: var(--bg-page);
 }
 
 .upload-text {
   font-size: 14px;
-  color: #606266;
+  color: var(--fg-muted);
   margin-top: 12px;
 }
 
 .upload-text em {
-  color: #409eff;
+  color: var(--primary);
   font-style: normal;
-  font-weight: 500;
 }
 
 .upload-tip {
   font-size: 12px;
-  color: #909399;
+  color: var(--fg-muted);
   margin-top: 8px;
 }
 
-/* 文件列表 */
 .file-list {
   margin-top: 16px;
 }
 
 .file-list-title {
   font-size: 13px;
-  color: #606266;
+  color: var(--fg-default);
   margin-bottom: 8px;
-  font-weight: 500;
 }
 
 .file-item {
@@ -813,8 +757,8 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  background: #f9fafb;
-  border-radius: 8px;
+  background: var(--bg-page);
+  border: 2px solid var(--border-color);
   margin-bottom: 6px;
   font-size: 13px;
 }
@@ -827,7 +771,7 @@ onMounted(() => {
 }
 
 .file-size {
-  color: #909399;
+  color: var(--fg-muted);
   font-size: 12px;
 }
 </style>

@@ -28,7 +28,7 @@ public class VectorStoreFactory {
     private StoreInstanceMapper storeInstanceMapper;
 
     @Autowired
-    private RagKnowledgeBaseMapper ragKnowledgeBaseMapper;  // ← 新增
+    private RagKnowledgeBaseMapper ragKnowledgeBaseMapper;
 
     /**
      * 注册表：VectorStoreType → ChatClowVectorStore 实现类
@@ -55,12 +55,10 @@ public class VectorStoreFactory {
             if (store instanceof com.chatclow.storage.vector.mysql.MySQLVectorStore) {
                 registry.put("MYSQL", store);
             } else if (store instanceof com.chatclow.storage.vector.mongodb.MongoDBVectorStore) {
-                registry.put("MONGODB", store);  // ← 添加这行
+                registry.put("MONGODB", store);
 
             } else if (store instanceof com.chatclow.storage.vector.pgvector.PgVectorStore) {
                 registry.put("PGVECTOR", store);
-            } else if (store instanceof com.chatclow.storage.vector.demo.DemoVectorStore) {
-                registry.put("DEMO", store);  // ← 新增 Demo 类型
             } else {
                 System.out.println("[VectorStoreFactory] 警告：未识别的向量存储实现: " + store.getClass().getSimpleName());
             }

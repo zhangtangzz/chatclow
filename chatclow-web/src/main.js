@@ -9,6 +9,14 @@ import './style.css'
 
 const app = createApp(App)
 
+// 全局错误处理：防止白屏
+app.config.errorHandler = (err, instance, info) => {
+  console.error('[全局错误]', err, info)
+}
+window.addEventListener('unhandledrejection', (e) => {
+  console.error('[未处理的 Promise 拒绝]', e.reason)
+})
+
 // 注册所有 Element Plus 图标
 for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
   app.component(key, component)

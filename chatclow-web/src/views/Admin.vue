@@ -26,6 +26,11 @@
 
     <!-- 右侧内容 -->
     <div class="admin-content">
+      <!-- 运营概览 -->
+      <div v-if="activeMenu === 'dashboard'" class="dashboard-wrap">
+        <AdminDashboard />
+      </div>
+
       <!-- 用户管理 -->
       <div v-if="activeMenu === 'users'" class="content-panel">
         <div class="panel-header">
@@ -34,23 +39,30 @@
             <el-icon><Plus /></el-icon> 新建用户
           </el-button>
         </div>
-        <el-table :data="userList" border stripe style="width: 100%">
+        <el-table :data="userList" border stripe style="width: 100%" :resizable="false">
           <el-table-column prop="id" label="ID" width="70" />
-          <el-table-column prop="username" label="用户名" />
-          <el-table-column prop="email" label="邮箱" />
-          <el-table-column label="角色" width="100">
+          <el-table-column prop="username" label="用户名" width="200" />
+          <el-table-column prop="email" label="邮箱" width="720" />
+          <el-table-column label="角色" width="160">
             <template #default="{ row }">
               <el-tag :type="row.role === 2 ? 'danger' : 'info'">
                 {{ row.role === 2 ? '管理员' : '普通用户' }}
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="totals" label="剩余次数" width="100" />
-          <el-table-column label="操作" width="220">
+          <el-table-column prop="totals" label="剩余次数" width="120" />
+          <el-table-column label="Token消耗" width="189">
             <template #default="{ row }">
-              <el-button size="small" @click="openEditUser(row)">编辑</el-button>
-              <el-button size="small" @click="viewUserConversations(row)">查看对话</el-button>
-              <el-button size="small" type="danger" @click="handleDeleteUser(row)">删除</el-button>
+              {{ (tokenMap[row.id] || 0).toLocaleString() }}
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="260">
+            <template #default="{ row }">
+              <div class="action-row">
+                <el-button size="small" @click="openEditUser(row)">编辑</el-button>
+                <el-button size="small" @click="viewUserConversations(row)">查看对话</el-button>
+                <el-button size="small" type="danger" @click="handleDeleteUser(row)">删除</el-button>
+              </div>
             </template>
           </el-table-column>
         </el-table>
@@ -64,11 +76,11 @@
             <el-icon><Plus /></el-icon> 新建知识库
           </el-button>
         </div>
-        <el-table :data="kbList" border stripe style="width: 100%">
+        <el-table :data="kbList" border stripe style="width: 100%" :resizable="false">
           <el-table-column prop="id" label="ID" width="70" />
-          <el-table-column prop="kbName" label="知识库名称" />
+          <el-table-column prop="name" label="知识库名称" />
           <el-table-column prop="description" label="描述" />
-          <el-table-column label="存储后端" width="130">
+          <el-table-column label="存储后端" width="260">
             <template #default="{ row }">
               <el-tag>{{ getStoreName(row.vectorStoreType) }}</el-tag>
             </template>
@@ -78,10 +90,12 @@
               {{ formatTime(row.updatedDt) }}
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="220">
+          <el-table-column label="操作" width="260">
             <template #default="{ row }">
-              <el-button size="small" @click="openEditKb(row)">编辑</el-button>
-              <el-button size="small" type="danger" @click="handleDeleteKb(row)">删除</el-button>
+              <div class="action-row">
+                <el-button size="small" @click="openEditKb(row)">编辑</el-button>
+                <el-button size="small" type="danger" @click="handleDeleteKb(row)">删除</el-button>
+              </div>
             </template>
           </el-table-column>
         </el-table>
@@ -93,7 +107,7 @@
           <h2>用户对话记录 — {{ currentViewUser?.username }}</h2>
           <el-button @click="activeMenu = 'users'">返回用户列表</el-button>
         </div>
-        <el-table :data="conversationList" border stripe style="width: 100%">
+        <el-table :data="conversationList" border stripe style="width: 100%" :resizable="false">
           <el-table-column prop="id" label="ID" width="70" />
           <el-table-column prop="title" label="对话标题" />
           <el-table-column label="创建时间" width="180">
@@ -154,7 +168,7 @@
               </el-button>
             </div>
           </div>
-          <el-table :data="modelList" border stripe style="width: 100%">
+          <el-table :data="modelList" border stripe style="width: 100%" :resizable="false">
             <el-table-column type="selection" width="45" />
             <el-table-column prop="name" label="模型名称" min-width="140" />
             <el-table-column prop="provider" label="模型提供商" width="130" />
@@ -182,11 +196,13 @@
                 <span v-else style="color:#c0c4cc">-</span>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="180">
+            <el-table-column label="操作" width="260">
               <template #default="{ row }">
-                <el-button size="small" text @click="openEditModel(row)">编辑</el-button>
-                <el-button size="small" text @click="setDefaultModel(row)">设为默认</el-button>
-                <el-button size="small" text type="danger" @click="handleDeleteModel(row)">删除</el-button>
+                <div class="action-row">
+                  <el-button size="small" text @click="openEditModel(row)">编辑</el-button>
+                  <el-button size="small" text @click="setDefaultModel(row)">设为默认</el-button>
+                  <el-button size="small" text type="danger" @click="handleDeleteModel(row)">删除</el-button>
+                </div>
               </template>
             </el-table-column>
           </el-table>
@@ -280,8 +296,8 @@
               <el-button size="small" type="danger" @click="handleDeleteAgent(viewingAgent)">
                 <el-icon><Delete /></el-icon> 删除
               </el-button>
-              <el-button size="small" type="primary" @click="handlePublishAgent">
-                <el-icon><Promotion /></el-icon> 发布
+              <el-button size="small" :type="viewingAgent.status === 1 ? 'default' : 'primary'" @click="handlePublishAgent">
+                <el-icon><Promotion /></el-icon> {{ viewingAgent.status === 1 ? '已发布' : '发布' }}
               </el-button>
             </div>
           </div>
@@ -452,6 +468,18 @@
         <el-form-item label="API密钥">
           <el-input v-model="modelForm.apiKey" type="password" show-password placeholder="sk-..." />
         </el-form-item>
+        <el-form-item label="温度">
+          <el-input-number v-model="modelForm.temperature" :min="0" :max="2" :step="0.1" :precision="1" />
+          <span style="margin-left:8px;color:#999;font-size:12px">0~2，越低越保守</span>
+        </el-form-item>
+        <el-form-item label="最大Token">
+          <el-input-number v-model="modelForm.maxTokens" :min="1" :max="131072" :step="1024" />
+          <span style="margin-left:8px;color:#999;font-size:12px">单次回复最大长度</span>
+        </el-form-item>
+        <el-form-item label="Top-P">
+          <el-input-number v-model="modelForm.topP" :min="0" :max="1" :step="0.05" :precision="2" />
+          <span style="margin-left:8px;color:#999;font-size:12px">0~1，核采样参数</span>
+        </el-form-item>
         <el-form-item label="状态">
           <el-switch v-model="modelForm.status" :active-value="1" :inactive-value="0" />
           <span style="margin-left:8px;color:#999">{{ modelForm.status === 1 ? '启用' : '禁用' }}</span>
@@ -461,6 +489,28 @@
         <el-button @click="showAddModelDialog = false">取消</el-button>
         <el-button type="primary" @click="handleSaveModel">确定</el-button>
       </template>
+    </el-dialog>
+
+    <!-- 对话详情弹窗 -->
+    <el-dialog v-model="showConvDetailDialog" title="对话详情" width="700px">
+      <div v-loading="convDetailLoading">
+        <div v-if="convDetailMessages.length === 0" style="text-align:center;color:#909399;padding:40px 0">
+          暂无对话记录
+        </div>
+        <div v-else class="conv-detail-list">
+          <div
+            v-for="(msg, idx) in convDetailMessages"
+            :key="idx"
+            :class="['conv-detail-msg', msg.role]"
+          >
+            <el-tag :type="msg.role === 'user' ? 'primary' : 'success'" size="small" class="conv-detail-role">
+              {{ msg.role === 'user' ? '用户' : 'AI' }}
+            </el-tag>
+            <div class="conv-detail-content">{{ msg.content }}</div>
+            <div class="conv-detail-time">{{ formatTime(msg.createdDt) }}</div>
+          </div>
+        </div>
+      </div>
     </el-dialog>
 
     <!-- 新建/编辑智能体对话框 -->
@@ -501,15 +551,19 @@ import { useUserStore } from '../stores/user'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Plus, SwitchButton, User, Collection, ChatLineSquare, Edit, Delete, Cpu,
-  Search, Sort, More, View, ArrowLeft, Promotion, Check, Monitor, RefreshRight
+  Search, Sort, More, View, ArrowLeft, Promotion, Check, Monitor, RefreshRight,
+  DataAnalysis
 } from '@element-plus/icons-vue'
 import request from '../api/request'
+import { getAdminTokenSummary } from '../api/token'
+import AdminDashboard from './AdminDashboard.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
 
 const activeMenu = ref('users')
 const userList = ref([])
+const tokenMap = ref({})
 const kbList = ref([])
 const agentList = ref([])
 const conversationList = ref([])
@@ -529,7 +583,7 @@ const modelList = ref([])
 const modelSearch = ref('')
 const showAddModelDialog = ref(false)
 const editingModel = ref(null)
-const modelForm = ref({ name: '', provider: '', modelCode: '', apiUrl: '', apiKey: '', status: 1 })
+const modelForm = ref({ name: '', provider: '', modelCode: '', apiUrl: '', apiKey: '', status: 1, temperature: 0.7, maxTokens: 4096, topP: 1.0 })
 
 // 按提供商分组
 const providerList = computed(() => {
@@ -569,7 +623,7 @@ async function loadModelList() {
 
 function openAddModelDialog() {
   editingModel.value = null
-  modelForm.value = { name: '', provider: '', modelCode: '', apiUrl: '', apiKey: '', status: 1 }
+  modelForm.value = { name: '', provider: '', modelCode: '', apiUrl: '', apiKey: '', status: 1, temperature: 0.7, maxTokens: 4096, topP: 1.0 }
   showAddModelDialog.value = true
 }
 
@@ -667,6 +721,9 @@ const testMessages = ref([])
 const testInput = ref('')
 const testLoading = ref(false)
 const chatMessagesRef = ref(null)
+const showConvDetailDialog = ref(false)
+const convDetailMessages = ref([])
+const convDetailLoading = ref(false)
 
 // 头像颜色生成
 function avatarStyle(name) {
@@ -724,8 +781,20 @@ async function handleSaveAgentConfig() {
   }
 }
 
-function handlePublishAgent() {
-  ElMessage.success('发布功能待接入')
+async function handlePublishAgent() {
+  try {
+    const res = await request.put(`/agent/status/${viewingAgent.value.id}`)
+    if (res.code === 200) {
+      const newStatus = res.data.newStatus
+      viewingAgent.value.status = newStatus
+      // 同步刷新列表中的状态
+      const idx = agentList.value.findIndex(a => a.id === viewingAgent.value.id)
+      if (idx >= 0) agentList.value[idx].status = newStatus
+      ElMessage.success(newStatus === 1 ? '已发布，所有用户可见' : '已下架，用户不可见')
+    }
+  } catch (e) {
+    ElMessage.error('操作失败')
+  }
 }
 
 async function sendTestMessage() {
@@ -755,6 +824,7 @@ function scrollToBottom() {
 }
 
 const menu = [
+  { key: 'dashboard', label: '运营概览', icon: DataAnalysis },
   { key: 'users', label: '用户管理', icon: User },
   { key: 'kb', label: '知识库管理', icon: Collection },
   { key: 'agents', label: '智能体管理', icon: Cpu },
@@ -946,8 +1016,18 @@ async function viewUserConversations(row) {
   }
 }
 
-function viewConversationDetail(row) {
-  ElMessage.info('对话详情查看功能待实现')
+async function viewConversationDetail(row) {
+  showConvDetailDialog.value = true
+  convDetailLoading.value = true
+  try {
+    const res = await request.get('/record/list', { params: { conversationId: row.id } })
+    convDetailMessages.value = res.data || []
+  } catch (e) {
+    ElMessage.error('加载对话详情失败')
+    convDetailMessages.value = []
+  } finally {
+    convDetailLoading.value = false
+  }
 }
 
 function handleLogout() {
@@ -955,11 +1035,23 @@ function handleLogout() {
   router.push('/login')
 }
 
+async function loadTokenSummary() {
+  try {
+    const res = await getAdminTokenSummary()
+    if (res.code === 200) {
+      const map = {}
+      ;(res.data || []).forEach(item => { map[item.userId] = item.totalTokens })
+      tokenMap.value = map
+    }
+  } catch (e) { /* 忽略 */ }
+}
+
 onMounted(() => {
   loadUsers()
   loadKbList()
   loadAgentList()
   loadModelList()
+  loadTokenSummary()
 })
 </script>
 
@@ -967,22 +1059,30 @@ onMounted(() => {
 .admin-layout {
   display: flex;
   height: 100vh;
-  background: #f5f7fa;
+  background: var(--bg-page);
 }
 .admin-sidebar {
   width: 220px;
-  background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
-  color: #fff;
+  background: var(--sidebar-bg);
+  border-right: 3px solid var(--border-color);
   display: flex;
   flex-direction: column;
   padding: 20px 0;
+  flex-shrink: 0;
 }
 .sidebar-title {
+  font-family: var(--font-marker);
   font-size: 18px;
-  font-weight: bold;
+  color: var(--fg-default);
   padding: 0 20px 20px;
-  border-bottom: 1px solid rgba(255,255,255,0.1);
+  border-bottom: 3px solid var(--border-color);
   margin-bottom: 10px;
+}
+.dashboard-wrap {
+  background: transparent;
+  padding: 0;
+  border: none;
+  box-shadow: none;
 }
 .sidebar-item {
   display: flex;
@@ -990,62 +1090,93 @@ onMounted(() => {
   gap: 10px;
   padding: 12px 20px;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: all 0.2s;
   font-size: 14px;
+  font-family: var(--font-hand);
+  color: var(--fg-default);
+  border-left: 3px solid transparent;
 }
-.sidebar-item:hover { background: rgba(255,255,255,0.1); }
-.sidebar-item.active { background: rgba(103,194,58,0.3); border-right: 3px solid #67c23a; }
+.sidebar-item:hover { background: rgba(45,45,45,0.1); }
+.sidebar-item.active { background: rgba(255,77,77,0.08); border-left-color: var(--primary); border-left-width: 4px; color: var(--primary); font-weight: 700; font-family: var(--font-marker); }
 .sidebar-bottom {
   margin-top: auto;
   padding: 20px;
-  border-top: 1px solid rgba(255,255,255,0.1);
+  border-top: 3px solid var(--border-color);
+  background: rgba(45,45,45,0.04);
 }
 .sidebar-user {
   font-size: 12px;
-  color: rgba(255,255,255,0.6);
+  color: var(--fg-muted);
   margin-top: 10px;
 }
+.action-row { display: flex; gap: 8px; align-items: center; justify-content: flex-end; }
+.admin-content .el-table .el-table__cell { padding: 6px 6px !important; }
+.admin-content .el-table th.el-table__cell { background: #e8e4da !important; font-weight: 700 !important; color: var(--fg-default) !important; }
+.admin-content .el-button--small { padding: 4px 10px !important; font-size: 12px !important; }
 .admin-content {
   flex: 1;
   padding: 24px;
   overflow-y: auto;
+  background: var(--bg-page);
 }
 .content-panel {
-  background: #fff;
-  border-radius: 12px;
+  background: var(--bg-card);
+  border: 3px solid var(--border-color);
+  box-shadow: var(--shadow-hard);
   padding: 24px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  border-radius: 0;
+  position: relative;
+}
+.content-panel::before {
+  content: '';
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  width: 96px;
+  height: 24px;
+  background: rgba(0,0,0,0.08);
+  transform: translateX(-50%) rotate(-1deg);
+  pointer-events: none;
 }
 .panel-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
+  padding-bottom: 14px;
+  border-bottom: 3px solid var(--border-color);
 }
-.panel-header h2 { margin: 0; font-size: 20px; }
+.panel-header h2 {
+  margin: 0;
+  font-family: var(--font-marker);
+  font-size: 20px;
+  color: var(--fg-default);
+  text-decoration: underline wavy;
+  text-underline-offset: 4px;
+}
 
 /* ===== 智能体管理 ===== */
 .agent-panel { padding: 0; background: transparent; box-shadow: none; }
-.agent-panel .panel-header { padding: 24px 24px 16px; background: #fff; border-radius: 12px; margin-bottom: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.04); }
-.panel-subtitle { margin: 4px 0 0; font-size: 13px; color: #909399; }
+.agent-panel .panel-header { padding: 24px 24px 16px; background: var(--bg-card); border: 3px solid var(--border-color); box-shadow: var(--shadow-hard); margin-bottom: 16px; border-bottom: 3px solid var(--border-color); }
+.panel-subtitle { margin: 4px 0 0; font-size: 13px; color: var(--fg-muted); font-family: var(--font-hand); }
 .agent-toolbar { display: flex; gap: 10px; align-items: center; }
 .agent-search { width: 260px; }
 
 /* 卡片网格 */
 .agent-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
 .agent-card {
-  background: #fff;
-  border-radius: 16px;
+  background: var(--bg-card);
+  border: 3px solid var(--border-color);
+  box-shadow: var(--shadow-hard-sm);
   padding: 20px;
   cursor: pointer;
-  border: 1px solid #f0f0f0;
-  transition: all 0.25s ease;
+  transition: all 0.2s ease-out;
   position: relative;
+  border-radius: 0;
 }
 .agent-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 12px 40px rgba(0,0,0,0.08);
-  border-color: #e0e7ff;
+  box-shadow: var(--shadow-hard-lg);
 }
 .agent-card-header {
   display: flex;
@@ -1054,44 +1185,49 @@ onMounted(() => {
   margin-bottom: 14px;
 }
 .agent-avatar {
-  width: 48px; height: 48px; border-radius: 50%;
+  width: 48px; height: 48px;
   display: flex; align-items: center; justify-content: center;
   color: #fff; font-size: 20px; font-weight: 600;
+  border: 3px solid var(--border-color);
+  box-shadow: var(--shadow-hard-sm);
 }
 .agent-avatar-sm {
-  width: 32px; height: 32px; border-radius: 50%;
+  width: 32px; height: 32px;
   display: flex; align-items: center; justify-content: center;
   color: #fff; font-size: 14px; font-weight: 600;
+  border: 2px solid var(--border-color);
+  flex-shrink: 0;
 }
 .agent-menu-btn {
-  padding: 4px; border-radius: 6px;
-  color: #c0c4cc; cursor: pointer;
+  padding: 4px;
+  color: var(--fg-muted); cursor: pointer;
 }
-.agent-menu-btn:hover { background: #f5f7fa; color: #606266; }
+.agent-menu-btn:hover { color: var(--fg-default); }
 .agent-card-name {
-  margin: 0 0 8px; font-size: 16px; font-weight: 600; color: #303133;
+  margin: 0 0 8px; font-family: var(--font-marker); font-size: 16px; color: var(--fg-default);
 }
 .agent-card-desc {
-  margin: 0 0 16px; font-size: 13px; color: #909399;
+  margin: 0 0 16px; font-size: 13px; color: var(--fg-muted);
   line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   overflow: hidden;
 }
 .agent-card-footer {
   display: flex; justify-content: space-between; align-items: center;
-  font-size: 12px; color: #c0c4cc;
+  font-size: 12px; color: var(--fg-muted); font-family: var(--font-hand);
 }
 .agent-card-footer .el-icon { vertical-align: middle; margin-right: 2px; }
 
 /* 详情页 */
 .agent-detail-header {
   display: flex; justify-content: space-between; align-items: center;
-  padding: 16px 24px; background: #fff; border-radius: 12px;
-  margin-bottom: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+  padding: 16px 24px; background: var(--bg-card); border: 3px solid var(--border-color);
+  box-shadow: var(--shadow-hard); margin-bottom: 16px;
+  border-radius: 0;
 }
-.back-btn { cursor: pointer; color: #606266; font-size: 18px; margin-right: 12px; }
-.back-btn:hover { color: #3b82f6; }
+.back-btn { cursor: pointer; color: var(--fg-default); font-size: 18px; margin-right: 12px; }
+.back-btn:hover { color: var(--primary); }
 .agent-detail-breadcrumb { display: flex; align-items: center; }
-.agent-detail-title { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 600; color: #303133; }
+.agent-detail-title { display: flex; align-items: center; gap: 10px; font-family: var(--font-marker); font-size: 18px; color: var(--fg-default); }
 .status-tag { margin-left: 4px; }
 .agent-detail-actions { display: flex; gap: 8px; }
 
@@ -1100,53 +1236,66 @@ onMounted(() => {
 }
 .agent-detail-left {
   width: 420px; flex-shrink: 0;
-  background: #fff; border-radius: 12px; padding: 20px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+  background: var(--bg-card); border: 3px solid var(--border-color);
+  box-shadow: var(--shadow-hard); padding: 20px;
   overflow-y: auto;
+  border-radius: 0;
 }
 .agent-detail-right {
   flex: 1;
-  background: #fff; border-radius: 12px; padding: 20px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+  background: var(--bg-card); border: 3px solid var(--border-color);
+  box-shadow: var(--shadow-hard); padding: 20px;
   display: flex; flex-direction: column;
+  border-radius: 0;
 }
-.agent-detail-right h3 { margin: 0 0 16px; font-size: 16px; }
+.agent-detail-right h3 { margin: 0 0 16px; font-family: var(--font-marker); font-size: 16px; color: var(--fg-default); text-decoration: underline wavy; text-underline-offset: 3px; }
 
-.detail-section { margin-bottom: 24px; }
+.detail-section {
+  margin-bottom: 24px;
+  background: var(--bg-page);
+  border: 2px dashed rgba(45,45,45,0.2);
+  padding: 16px;
+}
 .detail-section h3 {
-  margin: 0 0 12px; font-size: 14px; font-weight: 600; color: #606266;
-  padding-left: 8px; border-left: 3px solid #3b82f6;
+  margin: 0 0 12px; font-family: var(--font-marker); font-size: 14px; color: var(--fg-default);
+  text-decoration: underline wavy; text-underline-offset: 3px;
 }
-.detail-form .form-row { margin-bottom: 14px; }
+.detail-form .form-row {
+  margin-bottom: 14px;
+  padding: 8px 10px;
+  border-bottom: 1px dashed rgba(45,45,45,0.1);
+}
+.detail-form .form-row:last-child { border-bottom: none; }
 .detail-form .form-row label {
-  display: block; font-size: 13px; color: #606266; margin-bottom: 6px; font-weight: 500;
+  display: block; font-size: 13px; color: var(--fg-default); margin-bottom: 6px;
+  font-family: var(--font-marker);
 }
-.switch-label { margin-left: 8px; font-size: 13px; color: #909399; }
+.switch-label { margin-left: 8px; font-size: 13px; color: var(--fg-muted); }
 .system-prompt-input :deep(.el-textarea__inner) { font-family: 'Menlo', 'Monaco', monospace; font-size: 13px; }
 
 /* 聊天预览 */
 .chat-preview-box {
   flex: 1; display: flex; flex-direction: column;
-  border: 1px solid #f0f0f0; border-radius: 12px; overflow: hidden;
+  border: 3px solid var(--border-color); box-shadow: var(--shadow-hard-sm);
+  overflow: hidden;
 }
 .chat-messages {
   flex: 1; padding: 16px; overflow-y: auto;
-  background: #fafbfc;
+  background: var(--bg-page);
 }
 .chat-msg {
   display: flex; gap: 10px; margin-bottom: 16px;
 }
 .chat-msg.user { flex-direction: row-reverse; }
-.chat-msg.user .msg-content { background: #3b82f6; color: #fff; border-radius: 16px 16px 4px 16px; }
+.chat-msg.user .msg-content { background: var(--primary); color: #fff; border: 3px solid var(--border-color); box-shadow: var(--shadow-hard-sm); }
 .msg-content {
   max-width: 70%; padding: 10px 14px;
-  background: #fff; border-radius: 16px 16px 16px 4px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-  font-size: 14px; line-height: 1.6; color: #303133;
+  background: var(--bg-card); border: 3px solid var(--border-color);
+  box-shadow: var(--shadow-hard); font-size: 14px; line-height: 1.6; color: var(--fg-default);
 }
 .msg-typing { display: flex; gap: 4px; padding: 6px 0; }
 .msg-typing span {
-  width: 6px; height: 6px; background: #c0c4cc; border-radius: 50%;
+  width: 6px; height: 6px; background: var(--primary);
   animation: typing 1.4s infinite ease-in-out both;
 }
 .msg-typing span:nth-child(1) { animation-delay: -0.32s; }
@@ -1157,51 +1306,87 @@ onMounted(() => {
 }
 .chat-input-bar {
   display: flex; gap: 8px; padding: 12px 16px;
-  background: #fff; border-top: 1px solid #f0f0f0;
+  background: var(--bg-card); border-top: 3px solid var(--border-color);
 }
 .chat-input-bar .el-input { flex: 1; }
 
 /* ===== 大模型管理 ===== */
-.model-panel { padding: 0; background: transparent; box-shadow: none; }
+.model-panel { padding: 0; background: transparent; box-shadow: none; border: none; }
 
-/* 提供商卡片 */
 .model-providers {
-  background: #fff; border-radius: 12px; padding: 24px;
-  margin-bottom: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+  background: var(--bg-card); border: 3px solid var(--border-color);
+  box-shadow: var(--shadow-hard); padding: 24px;
+  margin-bottom: 16px;
+  border-radius: 0;
+  position: relative;
+}
+.model-providers::before {
+  content: '';
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  width: 96px;
+  height: 24px;
+  background: rgba(0,0,0,0.08);
+  transform: translateX(-50%) rotate(2deg);
+  pointer-events: none;
 }
 .provider-header {
   display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;
+  padding-bottom: 14px; border-bottom: 3px solid var(--border-color);
 }
-.provider-header h3 { margin: 0; font-size: 16px; font-weight: 600; }
+.provider-header h3 {
+  margin: 0; font-family: var(--font-marker); font-size: 16px; color: var(--fg-default);
+  text-decoration: underline wavy;
+  text-underline-offset: 3px;
+}
 .provider-search { width: 260px; }
 .provider-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px;
 }
 .provider-card {
-  border: 1px solid #f0f0f0; border-radius: 12px; padding: 18px;
-  transition: all 0.25s ease;
+  border: 3px solid var(--border-color); box-shadow: var(--shadow-hard-sm);
+  padding: 18px; background: var(--bg-card);
+  transition: all 0.2s ease-out;
+  border-radius: 0;
 }
 .provider-card:hover {
-  border-color: #d0d7ff; box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-hard);
 }
 .provider-top {
   display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;
 }
-.provider-name { font-size: 15px; font-weight: 600; color: #303133; }
-.provider-desc { font-size: 12px; color: #909399; margin-bottom: 14px; min-height: 18px; }
+.provider-name { font-family: var(--font-marker); font-size: 15px; color: var(--fg-default); }
+.provider-desc { font-size: 12px; color: var(--fg-muted); margin-bottom: 14px; min-height: 18px; }
 .provider-actions {
   display: flex; gap: 4px;
 }
 .provider-actions .el-button { padding: 4px 8px; font-size: 12px; }
 
-/* 模型表格 */
 .model-table-wrap {
-  background: #fff; border-radius: 12px; padding: 24px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+  background: var(--bg-card); border: 3px solid var(--border-color);
+  box-shadow: var(--shadow-hard); padding: 24px;
+  border-radius: 0;
 }
 .model-table-header {
   display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;
+  padding-bottom: 12px; border-bottom: 3px solid var(--border-color);
 }
-.model-table-header h3 { margin: 0; font-size: 16px; font-weight: 600; }
+.model-table-header h3 { margin: 0; font-family: var(--font-marker); font-size: 16px; color: var(--fg-default); text-decoration: underline wavy; text-underline-offset: 3px; }
 .model-table-actions { display: flex; gap: 8px; }
+
+/* 对话详情弹窗 */
+.conv-detail-list { max-height: 500px; overflow-y: auto; }
+.conv-detail-msg {
+  padding: 12px 16px; margin-bottom: 12px;
+  border: 3px solid var(--border-color);
+  box-shadow: var(--shadow-hard-sm);
+  border-radius: 0;
+}
+.conv-detail-msg.user { background: var(--sidebar-bg); }
+.conv-detail-msg.assistant { background: var(--bg-card); }
+.conv-detail-role { margin-bottom: 8px; font-family: var(--font-marker); }
+.conv-detail-content { font-size: 14px; line-height: 1.6; color: var(--fg-default); white-space: pre-wrap; word-break: break-word; font-family: var(--font-hand); }
+.conv-detail-time { font-size: 12px; color: var(--fg-muted); margin-top: 6px; }
 </style>

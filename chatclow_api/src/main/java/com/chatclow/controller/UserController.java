@@ -1,9 +1,12 @@
 package com.chatclow.controller;
 
 import com.chatclow.common.R;
+import com.chatclow.entity.AgentConversation;
 import com.chatclow.entity.User;
+import com.chatclow.service.AgentConversationService;
 import com.chatclow.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 import javax.validation.Valid;
@@ -26,6 +29,9 @@ public class UserController {
     //@Autowired = 自动注入 Service
     @Autowired
     private UserService userService;
+
+    @Autowired
+    private AgentConversationService conversationService;
 
 
     /**
@@ -104,8 +110,15 @@ public class UserController {
      */
     @PutMapping("/admin/update/{id}")
     public R<Void> adminUpdateUser(@PathVariable Long id, @RequestBody User user) {
-        user.setId(id);           // 先把 id 设进实体
-        userService.updateById(user);  // MyBatis-Plus 只接收一个实体参数
+        user.setId(id);
+        // 如果密码不为空且不是脱敏值，进行 BCrypt 加密
+        String pw = user.getPassword();
+        if (pw != null && !pw.isEmpty() && !"****".equals(pw)) {
+            user.setPassword(new BCryptPasswordEncoder().encode(pw));
+        } else {
+            user.setPassword(null); // 不更新密码字段
+        }
+        userService.updateById(user);
         return R.ok("修改成功", null);
     }
 
@@ -124,10 +137,9 @@ public class UserController {
      * GET /api/user/admin/conversations/{userId}
      */
     @GetMapping("/admin/conversations/{userId}")
-    public R<List<Object>> adminGetUserConversations(@PathVariable Long userId) {
-        // TODO: 注入 ConversationService 后实现
-        // 这里先返回成功（空数据），避免编译报错
-        return R.ok("查询成功", null);
+    public R<List<AgentConversation>> adminGetUserConversations(@PathVariable Long userId) {
+        List<AgentConversation> list = conversationService.listByUserId(userId);
+        return R.ok("查询成功", list);
     }
 
 }

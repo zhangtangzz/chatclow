@@ -33,6 +33,9 @@ public class RagKnowledgeBase {
 
     private Integer status;           // 状态: 0=禁用 1=启用
 
+    /** 创建者用户ID */
+    private Long userId;
+
     private LocalDateTime createdDt;
 
     private LocalDateTime updatedDt;
@@ -61,6 +64,9 @@ public class RagKnowledgeBase {
 
     public Integer getStatus() { return status; }
     public void setStatus(Integer status) { this.status = status; }
+
+    public Long getUserId() { return userId; }
+    public void setUserId(Long userId) { this.userId = userId; }
 
     public LocalDateTime getCreatedDt() { return createdDt; }
     public void setCreatedDt(LocalDateTime createdDt) { this.createdDt = createdDt; }

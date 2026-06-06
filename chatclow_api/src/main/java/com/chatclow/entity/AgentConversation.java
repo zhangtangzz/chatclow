@@ -28,4 +28,6 @@ public class AgentConversation {
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdDt;
 
+    /** Token 累计消耗量 */
+    private Integer totalTokens;
 }

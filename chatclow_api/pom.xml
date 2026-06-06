@@ -98,6 +98,12 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- H2 内存数据库（测试用，不污染 MySQL） -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>test</scope>
+        </dependency>
 
         <!-- OkHttp：替代 HttpURLConnection，支持流式读取 -->
         <dependency>
@@ -137,6 +143,13 @@
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
             <version>42.7.1</version>
+        </dependency>
+
+        <!-- BCrypt 密码加密 -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-crypto</artifactId>
+            <version>5.7.6</version>
         </dependency>
 
     </dependencies>

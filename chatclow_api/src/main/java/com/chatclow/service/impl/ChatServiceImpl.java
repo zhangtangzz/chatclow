@@ -4,45 +4,46 @@ import com.chatclow.chain.ChatChain;
 import com.chatclow.context.ChatContext;
 import com.chatclow.dto.ChatResponse;
 import com.chatclow.service.ChatService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
  * AI 对话服务实现类
- * 流式（chatStream）和非流式（chat）统一走责任链 ChatChain
+ *
+ * <p>流式（chatStream）和非流式（chat）统一走责任链 ChatChain，
+ * 区别仅在于 ChatContext 的 streamMode 标志位。</p>
  */
 @Service
 public class ChatServiceImpl implements ChatService {
 
+    private static final Logger log = LoggerFactory.getLogger(ChatServiceImpl.class);
+
     @Autowired
     private ChatChain chatChain;
 
-    // ========== 非流式对话 ==========
-
     @Override
-    public ChatResponse chat(Long agentId, Long userId, String message, Long conversationId) {
+    public ChatResponse chat(Long agentId, Long userId, String message,
+                              Long conversationId, boolean memoryEnabled) {
         ChatContext ctx = new ChatContext(agentId, userId, message, conversationId, false);
-        ctx.setFullReply(new StringBuilder());
+        ctx.setMemoryEnabled(memoryEnabled);
         chatChain.execute(ctx);
         return new ChatResponse(ctx.getFullReply().toString(), ctx.getConversation().getId());
     }
 
-    // ========== 流式对话（SSE） ==========
-
     @Override
     public void chatStream(Long agentId, Long userId, String message,
-                           Long conversationId, SseEmitter emitter) {
+                           Long conversationId, boolean memoryEnabled, SseEmitter emitter) {
         try {
             ChatContext ctx = new ChatContext(agentId, userId, message, conversationId, true);
+            ctx.setMemoryEnabled(memoryEnabled);
             ctx.setEmitter(emitter);
-            ctx.setFullReply(new StringBuilder());
-
             chatChain.execute(ctx);
-
-            System.out.println("[SSE] 流式对话完成，回复长度: " + ctx.getFullReply().length());
+            log.info("[SSE] 流式对话完成，回复长度: {}", ctx.getFullReply().length());
         } catch (Exception e) {
-            System.err.println("[SSE] 流式对话异常: " + e.getMessage());
+            log.error("[SSE] 流式对话异常", e);
             emitter.complete();
         }
     }

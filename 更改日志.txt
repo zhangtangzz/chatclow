@@ -1,0 +1,502 @@
+ChatClow 项目更改日志
+====================
+
+2026-06-06 功能缺口补齐（6项）
+------------------------------
+
+【新增功能】
+1. 会话切换时加载历史消息
+2. 删除会话（含级联删除聊天记录）
+3. 清除对话记忆（保留会话，清空聊天记录）
+4. 模型参数可配置：temperature / maxTokens / topP
+5. 管理员查看用户对话详情弹窗
+6. 记忆开关真正生效（关闭后AI不带历史上下文）
+
+【后端改动】
+- ChatRequest.java          → 新增 memoryEnabled 字段
+- ChatContext.java          → 新增 memoryEnabled 字段 + getter/setter
+- ChatService.java          → 接口加 memoryEnabled 参数
+- ChatServiceImpl.java      → 传递 memoryEnabled 到 ChatContext
+- ChatController.java       → 从请求读取 memoryEnabled 传给 Service
+- ContextAssemblyStep.java  → memoryEnabled=false 时跳过加载历史
+- AgentConversationService.java     → 新增 deleteConversation / clearMemory 方法
+- AgentConversationServiceImpl.java → 实现删除会话 + 清除记忆
+- AgentConversationController.java  → 新增 DELETE /delete/{id} 和 /memory/{convId}
+- AiModel.java              → 新增 temperature / maxTokens / topP 字段
+- ModelCallStep.java        → 请求体加模型参数
+- SyncAiCallStep.java       → 第一次+第二次请求加模型参数
+- FunctionCallingStep.java  → 第二次请求加模型参数
+- UserController.java       → adminGetUserConversations 真正实现
+
+【前端改动】
+- api/chat.js       → 新增 getConversationRecords / deleteConversation / clearConversationMemory
+                       chatStream body 加 memoryEnabled
+- api/token.js      → 新增（上轮）getUserTokenStats / getAdminTokenSummary
+- views/Chat.vue    → 切换会话加载历史 / 悬停删除按钮 / 清除记忆对接API
+- views/Admin.vue   → 模型表单加温度/Token/Top-P / 对话详情弹窗
+- views/TokenStats.vue → 新增用量统计页面（上轮）
+- router/index.js   → 新增 /token-stats 路由（上轮）
+
+【数据库变更】
+- chatclow_ai_conversation.total_tokens  INT DEFAULT 0
+- chatclow_ai_model.temperature          DOUBLE DEFAULT 0.7
+- chatclow_ai_model.max_tokens           INT DEFAULT 4096
+- chatclow_ai_model.top_p                DOUBLE DEFAULT 1.0
+
+2026-06-06 测试体系搭建（三层 51 个用例全部通过）
+-------------------------------------------------
+
+【测试基础设施】
+- pom.xml                             → 新增 H2 依赖（test scope）
+- src/test/resources/application-test.yml → H2 测试环境配置（MySQL 兼容模式）
+- src/test/resources/schema-h2.sql    → H2 建表 DDL（9 张表）
+
+【Tier 1：Step 单元测试（Mockito，29 个）】
+- ContextAssemblyStepTest.java  (9 tests) → Agent/Model 加载、会话创建/加载、记忆开关、历史消息、异常场景
+- MessageBuildStepTest.java     (7 tests) → 消息构建、RAG 上下文拼接、工具 JSON、消息顺序
+- RecordSaveStepTest.java       (7 tests) → 回复保存、token 累计、边界条件
+- ToolCallHelperTest.java       (6 tests) → FC 消息拼接、推理内容、多工具调用、参数解析
+
+【Tier 2：Service 集成测试（H2，15 个）】
+- AgentConversationServiceImplTest.java      (5 tests) → 创建/查询/删除会话、用户隔离、清除记忆
+- AgentConversationRecordServiceImplTest.java (3 tests) → 保存/查询记录、空数据
+- ChatServiceImplTest.java                   (2 tests) → 非流式/流式链路、ChatContext 构建
+- RagDocumentServiceImplTest.java            (5 tests) → 文档 CRUD
+
+【Tier 3：Controller 接口测试（MockMvc，7 个）】
+- LoginControllerTest.java   (3 tests) → 登录成功、密码错误、用户不存在
+- TokenControllerTest.java   (2 tests) → 用户 token 统计、管理员汇总排序
+- ChatControllerTest.java    (2 tests) → /send 返回结构、/send-stream SSE
+
+2026-06-06 SSE 流式输出修复（多轮迭代，最终方案）
+-----------------------------------------------
+
+【问题】前端 AI 回复不是逐字流式出现，全文一次性显示
+【排查过程】
+  1. 后端 Tomcat response.setBufferSize(0) → F12 确认 SSE 已流式 ✅
+  2. fetch ReadableStream + async 回调 + setTimeout → 仍不行 ❌
+  3. setInterval 缓冲队列 → 引入响应式 bug，逻辑错乱 ❌
+  4. await + setTimeout(30ms) → 仍不行 ❌
+【根本原因】Vue 3 响应式：原始对象 aiMsg.content += text 绕过 Proxy，Vue 检测不到变化不更新 DOM
+【最终方案：requestAnimationFrame 逐字渲染】
+  - ChatController.java → sendStream() 加 HttpServletResponse，response.setBufferSize(0)
+  - api/chat.js         → 回调同步执行（无 await），速度快
+  - views/Chat.vue      → 新增 pendingChars 缓冲 + RAF 渲染循环
+    - SSE content 事件 → pendingChars += event.data（快速收集）
+    - renderNextChar()  → 每帧取 2 个字符写入 messages.value[idx].content（响应式代理）
+    - done/error        → stopCharRender() 清空缓冲 + 取消 RAF
+    架构：SSE 只管收字，RAF 独立驱动渲染，两者完全解耦
+
+2026-06-06 03:27:50 更新全局约束
+------------------------------
+- CLAUDE.md → 日志规则改为精确到秒钟，同一问题反复修改也要每次都记录
+
+2026-06-06 03:45:00 SSE 流式前端重写（第6次，独立 ref + setInterval 方案）
+-----------------------------------------------------------------------
+【改动方案】
+- 根本原因：之前 RAF 方案仍可能因 Vue 响应式代理问题导致 msg.content += text 不触发 DOM 更新
+- 新方案：用独立的 ref（streamText）驱动渲染，与消息对象完全解耦
+  1. SSE content 事件 → rawBuffer（非响应式字符串，最快速度收集）
+  2. setInterval 每 30ms → 从 rawBuffer 取 3 个字符写入 streamText.value（触发响应式）
+  3. 模板 displayContent(msg, idx) → msg.content + streamText.value（响应式绑定）
+  4. done/error → commitStreamText() 将 streamText 提交到 msg.content 并重置
+【前端改动】
+- views/Chat.vue → 变量：streamText ref + rawBuffer + streamTimer 替代 pendingChars + RAF
+- views/Chat.vue → 函数：displayContent / startStreamRender / stopStreamRender / commitStreamText
+- views/Chat.vue → 模板：v-html 用 displayContent(msg, idx)，打字指示器 v-if="streaming && !streamText"
+- views/Chat.vue → sendMessage：content 事件写 rawBuffer，done/error 调 commitStreamText
+
+2026-06-06 04:15:00 上线前功能补齐（BCrypt + 注册 + JWT刷新 + 限流 + 生产配置 + 错误边界）
+-------------------------------------------------------------------------------
+【改动清单】
+1. BCrypt 密码加密
+   - pom.xml → 加 spring-security-crypto 5.7.6
+   - UserServiceImpl.java → register() 中 encode 密码
+   - LoginController.java → matches() 校验密码
+   - UserController.java → adminUpdateUser 判断密码是否需加密
+
+2. 前端注册页面
+   - api/auth.js → 新增 register() 接口
+   - views/Login.vue → 新增注册/登录切换模式
+   - 注册表单：用户名 + 密码 + 确认密码 + 邮箱 + 表单验证规则
+   - 注册成功自动切回登录
+
+3. JWT 刷新机制
+   - JwtUtil.java → 新增 generateRefreshToken()（7天有效期）
+   - LoginController.java → 登录返回 refreshToken + 新增 POST /api/auth/refresh
+   - WebMvcConfig.java → /api/auth/refresh 排除 JWT 拦截
+   - api/request.js → 响应拦截器 401 自动用 refreshToken 刷新后重试
+   - stores/user.js → 保存 refreshToken 到 localStorage
+
+4. 请求限流
+   - config/RateLimitingFilter.java → 基于 IP+路径 滑动窗口限流
+   - 对话接口 30次/分钟，其余 API 60次/分钟
+
+5. 生产环境配置
+   - application-prod.yml → 数据库/Redis/Mongo/PG 密钥通过环境变量注入
+
+6. 前端错误边界
+   - components/ErrorBoundary.vue → 渲染错误兜底组件
+   - App.vue → 包裹 router-view
+   - main.js → 全局 errorHandler + unhandledrejection 监听
+
+2026-06-06 04:30:00 修复 BCrypt 兼容性 + 完整上线前审计
+--------------------------------------------------------
+【修复】
+- LoginController.java → 兼容旧版明文密码（检测是否以 $2a$/$2b$ 开头）
+- LoginControllerTest.java → 测试用户密码改为 BCrypt 编码
+- UserServiceImpl.java → 修复重复 import
+
+【审计结论】核心链路完整，51 测试全部通过。以下为不阻塞上线但建议后续迭代补齐的功能：
+  1. 404 页面（访问不存在路由显示空白）
+  2. 用户密码修改
+  3. 忘记密码/重置密码
+  4. 消息复制
+  5. 会话搜索/筛选
+  6. 知识库文档预览
+  7. 移动端响应式适配（Chat.vue）
+
+2026-06-06 04:45:00 确定 UI 设计风格为 Handwritten Sketch（手绘白板笔记）
+------------------------------------------------------------------
+- 参考桌面 code/AGENTS.md 中的设计系统
+- chatclow-web/CLAUDE.md → 新增完整设计规范章节（色彩/字体/圆角/阴影/动效/反模式）
+- CLAUDE.md → 技术栈表格新增设计风格行
+
+2026-06-06 05:00:00 全局 Handwritten Sketch 设计系统实施
+---------------------------------------------------
+【设计系统基础】
+- index.html → 添加 Google Fonts（Kalam + Patrick Hand），lang 改为 zh-CN
+- style.css → 完整重写为手绘风格：CSS 变量（纸张底色/墨水黑/标记笔红）、
+  硬阴影预设、wobbly 圆角预设、Element Plus 全局覆盖（按钮/输入框/表格/弹窗等）
+
+【Login.vue 手绘化】
+- 删除：粒子特效 / 深色渐变背景 / 玻璃卡片 / 暗色输入框 / 渐变按钮
+- 新增：暖白纸张背景 / wobbly 特性卡片 / 透明胶带装饰 / 标记笔红提交按钮 /
+  波浪下划线链接
+
+【Chat.vue 手绘化】
+- 侧边栏：浅色 #f8f6f0 背景（替代深色渐变），3px 右边框
+- Logo：标记笔红方块 + Kalam 字体
+- 会话项：悬停 3px 边框，激活态标记笔红
+- 工具栏：白色卡片 + 3px 底边框 + 透明胶带装饰
+- 消息气泡：用户=红色+硬阴影，AI=白色卡片+硬阴影+wobbly 圆角
+- 打字指示器：红色脉冲动画
+
+【Knowledge.vue 手绘化】
+- 页面背景改为 var(--bg-page)
+- Header：白色卡片 + 3px 底边框 + 硬阴影
+- 知识库卡片：3px 边框 + 硬阴影 + wobbly-1 圆角
+- 图标方块：标记笔红 + 3px 边框
+- 文档项：2px 边框 + 小硬阴影，悬停滑移
+- 上传拖拽区：3px 边框 + 硬阴影
+
+【Admin.vue 手绘化】
+- 侧边栏：浅色 #f8f6f0 背景（替代深色渐变），3px 右边框
+- 侧边栏标题：Kalam 字体，3px 分割线
+- 菜单项：墨水黑文字，激活态左侧标记笔红边框
+- 内容面板：3px 边框 + 硬阴影 + wobbly-1 圆角
+- 智能体卡片：3px 边框 + 硬阴影 + wobbly-2 圆角
+- 头像：3px 边框 + 硬阴影（移除圆形，改为方形）
+- 详情面板：3px 边框 + 硬阴影 + wobbly 圆角
+- Section 标题：波浪下划线替代蓝色左边框
+- 聊天预览：3px 边框，用户气泡标记笔红
+- 提供商卡片：3px 边框 + wobbly-4 圆角
+- 模型表格区：3px 边框 + 硬阴影 + wobbly-2 圆角
+- 对话详情：2px 边框 + 小硬阴影
+
+【TokenStats.vue 手绘化】
+- 页面背景改为 var(--bg-page)
+- 统计卡片：3px 边框 + 硬阴影 + wobbly-2 圆角
+- 数值颜色改为标记笔红
+
+2026-06-06 05:30:00 对比度增强（黄色卡片 + 蓝色助手 + 黑色设置栏）
+---------------------------------------------------------------
+【Chat.vue 对比度调整】
+- AI 消息气泡：从白色改为卡通便利贴黄色 #fef5d4，边框暖金色
+- AI 头像：标记笔红 → 钢笔蓝（accent），突显助手身份
+- 用户头像：钢笔蓝 → 标记笔红
+- Agent 标签：info 灰色 → primary 蓝色
+- Agent 选择区：浅蓝底 tint
+- 侧边栏底部（知识库/用量统计/退出按钮）：纯黑背景 + 白色文字
+  悬停变为标记笔红，加硬阴影 + 上浮动效
+- 侧边栏改为更暖的米色 #f5f0e8，增强纸质感对比
+- 会话列表（左侧）：改为黄色便签卡片效果
+  默认：#fef9e7 浅黄底 + 金色边框 + 小硬阴影
+  悬停：#fef5d4 中黄 + 硬阴影 + 右滑 2px
+  激活：#fce88d 深黄 + 粗金边框 + 右滑 4px + 标题加粗手写体
+
+2026-06-06 06:00:00 登录体验优化（自动新对话 + 快捷提问）
+-------------------------------------------------------
+【User.java】移除 role 字段的 @NotNull 校验
+- 注册时前端不传 role，后端 register() 已默认 setRole(1)
+- @Valid 提前拦截导致注册失败
+
+【Chat.vue 用户引导优化】
+- 登录后无会话时：左侧自动显示「新对话」黄色占位卡片（带"新"标签）
+- loadConversations 自动调用 newConversation() 进入就绪状态
+- 空白欢迎区改为：👋 表情 + "开始新对话" + 快捷提问建议词
+- 快捷提问：点击自动填入问题并发送（解释 RAG / 写邮件 / AI Agent）
+
+2026-06-06 06:30:00 智能体全局共享 + 注册问题修复
+--------------------------------------------------------
+【后端】AiAgentController.java
+- listByUserId 改为所有用户都返回全部启用智能体（原普通用户只看到自己的）
+- 移除 UserMapper 不再需要的注入
+
+【前端】Chat.vue
+- 非管理员隐藏"新建智能体"按钮和弹窗
+- 所有用户都能看到并使用系统中已启用的智能体
+
+2026-06-06 07:00:00 新用户引导弹窗：选择智能体飞行动画
+--------------------------------------------------------
+【Chat.vue 新用户引导】
+- 新用户首次登录时（无会话 + 未完成引导），弹出半透明遮罩
+- 中间展示所有可用智能体卡片（emoji + 名称 + 描述）
+- 点击卡片触发飞行动画：卡片缩小 → 飞到左侧智能体选择区 → 自动选中
+- 可选"暂时跳过"，之后不再次弹出（sessionStorage 标记）
+- 非首次登录或已有会话的用户直接跳过引导，默认选中第一个智能体
+- 引入 AGENT_EMOJI_MAP 根据智能体名称关键词匹配 emoji（☕🎨📖等）
+
+【修复】User.java 移除 role 字段 @NotNull 校验
+- 注册时前端不传 role，后端已默认 setRole(1)，但 @Valid 提前拦截导致"角色不能为空"报错
+
+
+2026-06-06 14:50:00 知识库权限体系：用户可创建自己的知识库，管理员可管理全部
+--------------------------------------------------------------------------
+【需求】
+- 所有用户都可以创建知识库
+- 所有用户都可以查看全部知识库
+- 只有管理员或知识库创建者才能修改/删除/上传文档
+- 管理员可以管理所有知识库
+
+【后端改动】
+- RagKnowledgeBase.java → 新增 userId 字段 + getter/setter
+- RagKnowledgeBaseController.java → add() 自动从 JWT 取 userId 赋给 KB；
+  update/delete/toggleStatus 增加 canManage 权限检查（管理员或创建者）
+- RagDocumentController.java → upload/delete 增加 canManageKb 权限检查
+- schema-h2.sql → chatclow_rag_kb 表加 user_id 列
+
+【前端改动】
+- Knowledge.vue → "新建知识库"对所有用户开放
+- Knowledge.vue → 操作下拉菜单改为 v-if="canManage(kb)"（管理员或创建者）
+- Knowledge.vue → 文档删除按钮同理
+- Knowledge.vue → 新增 canManage() 函数判断操作权限
+- Knowledge.vue → 自己的知识库显示"我的"标签
+
+2026-06-06 14:50:00 智能体权限体系：每人只能管理自己的智能体
+--------------------------------------------------------------------------
+【需求】
+- 所有用户都可以创建智能体
+- 每人只能看到自己创建的智能体（私有）
+- 只有创建者或管理员可以修改/删除/切换状态
+- 管理员可以在管理后台看到所有智能体
+
+【后端改动】
+- AiAgentController.java → add() 从 JWT 取 userId（不信任前端传入）；
+  listByUserId() 改为按 userId 过滤（每人只看自己的）；
+  update/delete/toggleStatus 增加 canManage 权限检查
+- AiAgentServiceImpl.java → listByUserId 原实现已支持 userId 过滤（未改）
+
+【前端改动】
+- Chat.vue → 去掉所有 v-if="userStore.role === 2" 限制，
+  普通用户也可创建和管理自己的智能体
+
+2026-06-06 15:02:00 修复：管理员创建的智能体用户端不可见
+---------------------------------------------------
+【问题】listByUserId 只返回 userId 匹配的智能体，
+管理员创建的智能体（userId ≠ 当前用户）普通用户看不到
+【修复】AiAgentServiceImpl.java → listByUserId 改为返回
+用户自己的 + 管理员创建的智能体（管理员 role=2 的用户视为公共智能体创建者）
+
+2026-06-06 17:00:00 底部导航改为大卡片样式
+---------------------------------------------------
+【前端改动】
+- Chat.vue → sidebar-footer 模板重写：
+  - 去掉三个 el-button，改为三张 nav-card
+  - "知识库"卡片：文件夹图标 + "管理 RAG 文档" 描述
+  - "用量统计"卡片：图表图标 + "Token 消耗概览" 描述
+  - "退出登录"卡片：开关图标 + "切换账号" 描述，悬停变红色
+- Chat.vue → 删除旧的 sidebar-footer CSS，新增 nav-card 系列样式
+  - 白色卡片 + 3px 边框 + 硬阴影，与 agent-card 风格统一
+  - 每个卡片带右箭头，悬停箭头变红右移
+  - 退出卡片悬停整张变标记笔红，文字变白
+
+2026-06-06 17:25:00 修复使用帮助不显示（模板嵌套问题）
+---------------------------------------------------
+【问题】帮助引导 div 嵌套在 onboarding-overlay 内部，只有新用户引导时才显示
+【修复】将 help-overlay 移到 onboarding-overlay 外部，作为 chat-layout 的平级兄弟节点
+
+2026-06-06 17:20:00 使用帮助引导流程（三步）
+---------------------------------------------------
+【新增功能】
+- Chat.vue → 点击"使用帮助"按钮触发三步引导：
+  Step 1：智能体选择 → 点击卡片飞入侧边栏 → 自动进入下一步
+  Step 2：RAG 知识库提示 → 卡片 1.5s 缓慢放大到正中间 → 展示 RAG 说明 + 箭头指向「知识库」
+    → 点击"知道了"后 1.2s 缓慢缩小消失
+  Step 3：对话选择 → 对话卡片逐个弹出（scale 0→1，带延迟）→ 可创建新对话/打开已有对话
+    → 关闭引导
+- 每步可跳过，引导结束重置状态
+- CSS 动画：rag-zoom-in/out 缩放 + conv-pop-in 弹性弹出
+
+2026-06-06 17:10:00 工具栏多彩闪烁使用帮助按钮
+---------------------------------------------------
+【前端改动】
+- Chat.vue → toolbar-right 新增"使用帮助"卡片：
+  五彩循环变色（红→橙→金→绿→蓝→紫），同色发光阴影
+  悬停加速到 0.6s 一轮
+
+2026-06-06 16:50:00 智能体管理面板优化：透明遮罩 + 分组显示
+---------------------------------------------------
+【修复】
+- 遮罩变暗改为透明（保持点击关闭功能）
+- 面板 z-index 提高到 5001 解决按钮被遮罩拦截的问题
+【新增】
+- 面板内智能体列表分为两组：
+  管理员发布的 → "🛡️ 智慧助手"（agent.userId !== 当前用户）
+  用户自己的 → "🎨 个性化助手"（agent.userId === 当前用户）
+- 新增 computed: adminAgents / myAgents
+
+2026-06-06 16:40:00 智能体 UI 重构：大卡片 + 右侧滑出管理面板
+---------------------------------------------------
+【前端改动】
+- Chat.vue → 侧边栏智能体选择区重写：
+  - 去掉 dropdown 下拉框和三个小按钮
+  - 改为大卡片：emoji + 智能体名称 + "点击切换" 提示 + 右箭头
+  - 卡片悬停有上浮动效 + 箭头变红右移
+- Chat.vue → 新增右侧滑出管理面板（覆盖层动画）：
+  - 头部："智能体管理"标题 + 关闭按钮
+  - 当前智能体详情卡片：头像 + 名称 + 描述 + 编辑/删除按钮
+  - 所有智能体列表：点击即可切换，当前使用中的打"使用中"标签
+  - 底部："新建智能体"按钮
+  - 滑入动画 0.3s ease-out
+- Chat.vue → 新增 computed: currentAgent
+- Chat.vue → 新增 selectAgentFromPanel() 切换智能体并关闭面板
+- Chat.vue → 新增 ArrowRight 图标导入
+- 删除旧的 watch(showAgentDialog) 和 handleCreateAgent 逻辑
+
+2026-06-06 16:00:00 创建数据库链路可视化 HTML
+---------------------------------------------------
+【新增文件】
+- chatclow-web/public/database-chain.html → 自包含 HTML，手绘风格
+  展示 RAG 和 Tool 两大链路的数据库表关系、字段映射、shouldSkip 逻辑、
+  当前实际数据、每个 Agent 的可用性分析、完整请求数据流时序
+
+2026-06-06 18:00:00 帮助引导改进：Step 1 也飞入 + 减速动画
+---------------------------------------------------------
+【前端改动】
+- Chat.vue → 模板：Step 1 智能体选择从静态 div 移入 help-trans-card，
+  与 Step 2/3 共用放大缩小动画，从 agent-card 位置飞出
+- Chat.vue → showHelp()：加 nextTick animateCardIn('.agent-card', 560)
+- Chat.vue → advanceHelp()：Step 1 跳过改为调用 animateCardOut()
+- Chat.vue → handleHelpBgClick()：所有 Step 统一点击背景缩回
+- Chat.vue → helpSelectAgent()：删除 flyingCard 飞行动画，改为 animateCardOut() 缩回 agent-card
+- Chat.vue → finishStep()：新增 Step 1→2 的处理（Step 2 从 nav-card-pink 飞出）
+- Chat.vue → animateCardIn()：0.9s → 1.8s，timeout 950 → 1850
+- Chat.vue → animateCardOut()：0.7s → 1.5s，timeout 750 → 1550，支持 Step 1 定位到 agent-card
+- Chat.vue → CSS：删除 .help-step / .help-step-1 / @keyframes help-fade-in（不再需要）
+
+2026-06-06 18:05:00 RAG 提示文字改为"点击空白处下一步"
+---------------------------------------------------------
+【前端改动】
+- Chat.vue → Step 2 "← 前往知识库管理文档" → "点击空白处下一步 →"
+
+2026-06-06 18:10:00 全局工具：所有智能体默认带上 get_current_time / get_weather / calculate
+------------------------------------------------------------------------------
+【需求】用户不会自己给 agent 配工具，基础工具应该每个 agent 默认就有
+【后端改动】
+- AiFunctionServiceImpl.java → listByAgentId 改为查 agent 自己的工具 + 全局工具（agent_id = -1）
+【数据库】
+- chatclow_ai_function 插入 3 条 agent_id = -1 的全局工具记录（get_current_time, get_weather, calculate）
+
+2026-06-06 18:50:00 新增运营概览仪表盘（嵌入管理后台）
+---------------------------------------------------------
+【新增文件】
+- chatclow-web/src/views/AdminDashboard.vue → 运营概览仪表盘组件
+  - 4 项核心指标卡片：Token 消耗(紫)、总对话(靛蓝)、活跃用户(青蓝)、平均响应(绿)
+  - 三大面板：记忆概览(含环形饼图SVG) / RAG 摘要(含进度条) / 技能仪表板(含调用量)
+  - 右上角：近7天筛选 + 刷新按钮（含加载动画）
+  - 全部使用手绘风格
+【Admin.vue 改动】
+- 侧边栏菜单新增「运营概览」选项（排第一位）
+- 内容区新增 dashboard 面板，引入 AdminDashboard 组件
+
+2026-06-06 19:40:00 前端性能优化 + 会话加载守卫
+---------------------------------------------------
+【性能优化】
+- Chat.vue → startStreamRender：setInterval(30ms) → requestAnimationFrame
+  RAF 与浏览器绘制同步，标签页后台时自动暂停，减少无用 CPU 消耗
+- Chat.vue → scrollToBottom 仅在 streamText 内容真正变化时调用，
+  避免每 30ms 无意义强制布局
+【Bug 修复】
+- Chat.vue → loadConversations 增加 userId 守卫
+  （userId=0 时跳过请求，防止查出全量数据）
+
+2026-06-06 19:30:00 仪表盘接入真实数据
+-------------------------------------------
+【前端改动】
+- AdminDashboard.vue → 重写数据加载逻辑，调用现有后端 API：
+  - Token 总消耗 → getAdminTokenSummary() 汇总所有用户 token
+  - 总对话 → 遍历用户调用 /conversation/list 统计会话数
+  - 活跃用户 → /user/admin/list 获取普通用户数
+  - RAG 知识库数/文档数/分片数 → getKbList() + getDocList() 统计
+  - 平均响应时间暂保持模拟数据（后端暂无响应耗时记录）
+- 右上角刷新按钮真实刷新数据，加载态旋转动画
+
+2026-06-06 20:30:00 平均响应时长追踪 — 后端全链路 + 前端仪表盘
+--------------------------------------------------------------
+【需求】每次 AI 响应记录耗时，在运营概览中展示真实平均响应时长
+【后端改动】
+- ChatContext.java → 新增 startTime / responseTime 字段 + getter/setter
+- ModelCallStep.java → process() 开始记录 startTime，finally 中计算 responseTime
+- SyncAiCallStep.java → process() 开始记录 startTime，finally 中计算 responseTime
+- AgentConversationRecord.java → 新增 responseTime 字段（Long，毫秒）
+- RecordSaveStep.java → 保存记录时写入 ctx.responseTime
+- AgentConversationRecordMapper.java → 新增 @Select AVG(response_time) 查询
+- TokenController.java → 新增 GET /api/admin/avg-response-time 端点
+- schema-h2.sql → chatclow_ai_conversation_record 表加 response_time 列
+【前端改动】
+- api/token.js → 新增 getAdminAvgResponseTime() 接口
+- AdminDashboard.vue → loadDashboardData 调用平均耗时接口，替换假数据
+【数据库变更】
+- ALTER TABLE chatclow_ai_conversation_record ADD COLUMN response_time BIGINT DEFAULT NULL;
+
+2026-06-06 18:30:00 管理后台手绘化改造（Handwritten Sketch）
+---------------------------------------------------------
+【全局样式】
+- style.css → 表格行 hover 改为暖黄色 #fef5d4（替代默认蓝色）
+- style.css → 斑马纹行改为暖灰 #f8f6f0
+- style.css → 新增 el-input-number wobbly 圆角
+- style.css → 新增 el-select-dropdown-item 手写字体
+【Admin.vue 模板装饰】
+- 所有 .content-panel 添加透明胶带 ::before 装饰（rgba 半透旋转）
+- .model-providers 添加透明胶带 ::before 装饰
+【Admin.vue 文字样式】
+- .panel-header h2 → 波浪下划线
+- .provider-header h3 → 波浪下划线
+- .model-table-header h3 → 波浪下划线
+- .agent-detail-right h3 → 波浪下划线
+- .sidebar-item → 手写字体
+- .panel-subtitle → 手写字体
+- .agent-card-footer → 手写字体
+【Admin.vue 表单区域】
+- .detail-section → 虚线边框 + 暖纸底色
+- .form-row → 底部虚线分隔
+- .form-row label → 标记笔字体
+【Admin.vue 对话详情弹窗】
+- .conv-detail-msg → wobbly 圆角 + 3px 边框
+
+2026-06-06 21:00:00 用户管理表格列宽调整
+-----------------------------------------
+【最终列宽（用户管理表）】
+- ID: 70px
+- 用户名: 200px
+- 邮箱: 720px
+- 角色: 160px
+- 剩余次数: 120px
+- Token消耗: 189px
+- 操作: 260px（按钮靠右排列，间距 8px）
+【其他改动】
+- 所有表格禁用列拖动（:resizable="false"）
+- 单元格内边距收窄到 4px
+- 管理后台内小按钮改为 padding: 4px 10px
+- Panel 和 Element Plus 组件全部改为直角边框

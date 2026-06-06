@@ -5,8 +5,8 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.chatclow.entity.User;
 import com.chatclow.mapper.UserMapper;
 import com.chatclow.service.UserService;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 
 /**
  * 用户服务实现类
@@ -39,7 +39,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper,User> implements Use
         //创建新用户
         User user = new User();
         user.setUsername(username);
-        user.setPassword(password);
+        // BCrypt 加密密码
+        user.setPassword(new BCryptPasswordEncoder().encode(password));
         user.setEmail(email);
         user.setRole(1);
         user.setTotals(100);

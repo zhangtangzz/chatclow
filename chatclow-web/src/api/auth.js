@@ -6,3 +6,13 @@ export function login(username, password) {
     params: { username, password }
   })
 }
+
+// 注册
+export function register(username, password, email) {
+  return request.post('/user/register', { username, password, email })
+}
+
+// 刷新 Token
+export function refreshToken(refreshToken) {
+  return request.post('/auth/refresh', null, { params: { refreshToken } })
+}

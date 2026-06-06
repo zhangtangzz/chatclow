@@ -38,9 +38,10 @@ public class AiFunctionServiceImpl implements AiFunctionService {
     @Override
     public List<AiFunction> listByAgentId(Long agentId) {
         LambdaQueryWrapper<AiFunction> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(AiFunction::getAgentId, agentId);   // 按智能体ID筛选
-        wrapper.eq(AiFunction::getStatus, 1);             // 只要启用的
-        wrapper.orderByAsc(AiFunction::getId);            // 按ID升序
+        wrapper.and(w -> w.eq(AiFunction::getAgentId, agentId)     // 智能体自己的工具
+                          .or().eq(AiFunction::getAgentId, -1L));   // + 全局工具
+        wrapper.eq(AiFunction::getStatus, 1);
+        wrapper.orderByAsc(AiFunction::getId);
         return aiFunctionMapper.selectList(wrapper);
     }
 }

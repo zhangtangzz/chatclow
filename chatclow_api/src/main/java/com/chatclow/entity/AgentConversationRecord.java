@@ -29,4 +29,7 @@ public class AgentConversationRecord {
     //创建时间
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdDt;
+
+    //AI 响应耗时（毫秒）
+    private Long responseTime;
 }

@@ -21,7 +21,8 @@ public interface ChatService {
      * @param conversationId  会话ID（可选，传null则新建会话）
      * @return AI回复内容
      */
-    ChatResponse chat(Long agentId, Long userId, String message,Long conversationId);
+    ChatResponse chat(Long agentId, Long userId, String message,
+                     Long conversationId, boolean memoryEnabled);
 
 
     /**
@@ -34,6 +35,6 @@ public interface ChatService {
      * @param emitter         SSE 发射器，用于逐块推送数据
      */
     void chatStream(Long agentId, Long userId, String message,
-                    Long conversationId, SseEmitter emitter);
+                    Long conversationId, boolean memoryEnabled, SseEmitter emitter);
 
 }

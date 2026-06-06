@@ -17,6 +17,8 @@ public class JwtUtil {
 
     // Token 有效期：24 小时（单位：毫秒）
     private static final long EXPIRE_TIME = 24 * 60 * 60 * 1000L;
+    // 刷新 Token 有效期：7 天
+    private static final long REFRESH_EXPIRE_TIME = 7 * 24 * 60 * 60 * 1000L;
 
     /**
      * 生成 Token
@@ -62,6 +64,19 @@ public class JwtUtil {
     public static String getUsername(String token) {
         Claims claims = parseToken(token);
         return claims.get("username", String.class);
+    }
+
+    /**
+     * 生成 Refresh Token（7 天有效期）
+     */
+    public static String generateRefreshToken(Long userId, String username) {
+        return Jwts.builder()
+                .claim("userId", userId)
+                .claim("username", username)
+                .setIssuedAt(new Date())
+                .setExpiration(new Date(System.currentTimeMillis() + REFRESH_EXPIRE_TIME))
+                .signWith(SignatureAlgorithm.HS256, SECRET_KEY)
+                .compact();
     }
 
     /**

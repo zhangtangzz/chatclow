@@ -2,18 +2,24 @@ package com.chatclow.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.chatclow.entity.AiAgent;
+import com.chatclow.entity.User;
 import com.chatclow.mapper.AiAgentMapper;
+import com.chatclow.mapper.UserMapper;
 import com.chatclow.service.AiAgentService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class AiAgentServiceImpl implements AiAgentService {
 
     @Autowired
     private AiAgentMapper aiAgentMapper;
+
+    @Autowired
+    private UserMapper userMapper;
 
     @Override
     public boolean add(AiAgent aiAgent) {
@@ -25,12 +31,23 @@ public class AiAgentServiceImpl implements AiAgentService {
 
     @Override
     public List<AiAgent> listByUserId(Long userId) {
-        return aiAgentMapper.selectList(
-                new LambdaQueryWrapper<AiAgent>()
-                        .eq(AiAgent::getUserId, userId)
-                        .eq(AiAgent::getStatus, 1)
-                        .orderByDesc(AiAgent::getCreatedDt)
-        );
+        // 查出所有管理员的用户ID（管理员创建的 agent 对所有用户可见）
+        List<Long> adminUserIds = userMapper.selectList(
+                new LambdaQueryWrapper<User>()
+                        .eq(User::getRole, 2)
+                        .select(User::getId)
+        ).stream().map(User::getId).collect(Collectors.toList());
+
+        LambdaQueryWrapper<AiAgent> wrapper = new LambdaQueryWrapper<AiAgent>()
+                .eq(AiAgent::getStatus, 1)
+                .and(w -> {
+                    w.eq(AiAgent::getUserId, userId); // 自己的 agent
+                    if (!adminUserIds.isEmpty()) {
+                        w.or(in -> in.in(AiAgent::getUserId, adminUserIds)); // 管理员的 agent
+                    }
+                })
+                .orderByDesc(AiAgent::getCreatedDt);
+        return aiAgentMapper.selectList(wrapper);
     }
 
     @Override

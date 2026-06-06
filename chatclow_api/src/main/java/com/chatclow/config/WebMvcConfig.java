@@ -23,8 +23,9 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 .addPathPatterns("/**")
                 // 排除以下路径（不需要登录就能访问）
                 .excludePathPatterns(
-                        // 登录 & 注册（没登录怎么登录呢？）
+                        // 登录 & 注册 & 刷新 Token
                         "/api/auth/login",
+                        "/api/auth/refresh",
                         "/api/user/register",
                         // 静态资源
                         "/*.html",

@@ -11,6 +11,7 @@ public class ChatRequest {
     private Long userId;  //用户ID
     private String message; //用户消息内容
     private Long conversationId; // 会话ID
+    private boolean memoryEnabled = true; // 是否启用记忆（默认开启）
 
     public Long getAgentId() { return agentId; }
     public void setAgentId(Long agentId) { this.agentId = agentId; }
@@ -24,5 +25,7 @@ public class ChatRequest {
     public Long getConversationId() { return conversationId; }
     public void setConversationId(Long conversationId) { this.conversationId = conversationId; }
 
+    public boolean isMemoryEnabled() { return memoryEnabled; }
+    public void setMemoryEnabled(boolean memoryEnabled) { this.memoryEnabled = memoryEnabled; }
 
 }

@@ -9,7 +9,7 @@ export function chatSync(data) {
  * SSE 流式聊天
  * 用 fetch + ReadableStream 逐行读取
  */
-export async function chatStream({ agentId, userId, message, conversationId }, onEvent) {
+export async function chatStream({ agentId, userId, message, conversationId, memoryEnabled }, onEvent) {
   const token = localStorage.getItem('token')
   const response = await fetch('/api/chat/send-stream', {
     method: 'POST',
@@ -17,7 +17,7 @@ export async function chatStream({ agentId, userId, message, conversationId }, o
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {})
     },
-    body: JSON.stringify({ agentId, userId, message, conversationId })
+    body: JSON.stringify({ agentId, userId, message, conversationId, memoryEnabled })
   })
 
   if (!response.ok) {
@@ -65,4 +65,19 @@ export function createConversation(userId, title) {
   return request.post('/conversation/create', null, {
     params: { userId, title }
   })
+}
+
+// 获取会话历史消息
+export function getConversationRecords(conversationId) {
+  return request.get('/record/list', { params: { conversationId } })
+}
+
+// 删除会话
+export function deleteConversation(id) {
+  return request.delete(`/conversation/delete/${id}`)
+}
+
+// 清除会话记忆
+export function clearConversationMemory(convId) {
+  return request.delete(`/conversation/memory/${convId}`)
 }
