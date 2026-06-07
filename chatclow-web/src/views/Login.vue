@@ -155,6 +155,17 @@ async function handleLogin() {
   position: relative;
 }
 
+/* 全屏背景图 */
+.login-page::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: url('../assets/rainbow-bg.png') center/cover no-repeat;
+  opacity: 0.5;
+  pointer-events: none;
+  z-index: 0;
+}
+
 /* 布局 */
 .login-wrapper {
   display: flex;
@@ -162,6 +173,8 @@ async function handleLogin() {
   max-width: 100%;
   gap: 60px;
   align-items: center;
+  position: relative;
+  z-index: 1;
 }
 
 /* ===== 左侧品牌 ===== */

@@ -1850,10 +1850,36 @@ onMounted(async () => {
   color: #fff;
   animation: help-rainbow 1.8s linear infinite;
   z-index: 1;
+  overflow: visible;
+}
+.help-card::after {
+  content: '👈 点我';
+  position: absolute;
+  top: -28px;
+  right: -10px;
+  font-family: var(--font-marker);
+  font-size: 13px;
+  color: var(--primary);
+  background: var(--bg-card);
+  border: 2px solid var(--border-color);
+  box-shadow: var(--shadow-hard-sm);
+  padding: 3px 10px;
+  white-space: nowrap;
+  animation: help-tag-float 1.6s ease-in-out infinite;
+  transform: rotate(4deg);
+  pointer-events: none;
+  line-height: 1.4;
 }
 .help-card:hover {
   animation: help-rainbow 0.6s linear infinite;
   transform: scale(1.05);
+}
+.help-card:hover::after {
+  display: none;
+}
+@keyframes help-tag-float {
+  0%, 100% { transform: translateY(0) rotate(4deg); }
+  50% { transform: translateY(-6px) rotate(4deg); }
 }
 @keyframes help-rainbow {
   0%   { background: #ff4d4d; box-shadow: 0 0 12px #ff4d4d; }
