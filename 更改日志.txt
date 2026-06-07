@@ -500,3 +500,404 @@ ChatClow 项目更改日志
 - 单元格内边距收窄到 4px
 - 管理后台内小按钮改为 padding: 4px 10px
 - Panel 和 Element Plus 组件全部改为直角边框
+
+2026-06-06 22:00:00 RAG 简化开关 — 去掉绑定知识库，开启则搜全部
+-----------------------------------------------------------------
+【需求】用户创建 agent 时不懂该绑定哪个知识库，改为只有开/关，开启后自动检索所有知识库
+【后端改动】
+- RagStep.java → shouldSkip() 去掉 kbId==null 条件；process() 中 kbId 为 null 时调 getDefaultVectorStore()
+- VectorStoreFactory.java → 新增 getDefaultVectorStore() 方法，不依赖 kbId 返回可用向量存储实例
+- VectorSearchServiceImpl.java → search() 和 keywordSearch() 中 kbId 为 null 时不加 WHERE kb_id 过滤
+【前端改动】
+- Admin.vue → 智能体详情和新建对话框中删除"绑定知识库"下拉框；保存时 kbId=null
+- Chat.vue → 智能体表单中删除"知识库"选择框；保存时 kbId=null
+
+2026-06-06 23:00:00 新增 4 个内置智能体（翻译/邮件/总结/找工作）
+
+2026-06-06 23:30:00 新增"提示词工程师"智能体 + 智能体详情面板改系统提示词编辑器
+-----------------------------------------------------------------
+【新增智能体】
+- 提示词工程师 — 从 qiuzhi-skill-creator 蒸馏出来的提示词生成助手
+  引导用户通过 4 阶段交互（需求挖掘→结构设计→生成提示词→测试建议）
+  输出结构化 Agent System Prompt
+【前端改动】
+- Admin.vue → 智能体详情右侧"预览与调试"改为"系统提示词"大面积编辑器
+- Admin.vue → 删除左侧小面积系统提示词输入框，避免重复
+- Admin.vue → 删除 testMessages/testInput/testLoading 等测试相关代码和 CSS
+【数据库】
+- chatclow_ai_agent 插入"提示词工程师"（user_id=1, model_id=1）
+-----------------------------------------------------------------
+【新增智能体】
+1. 翻译助手 — 中英互译，支持各专业领域，保持原文格式和风格
+2. 邮件助手 — 写商务邮件、回复客户，可选正式/亲切语气
+3. 总结提炼助手 — 长文总结、会议纪要、要点提取、文档精炼
+4. 找工作助手 — 分析简历并提出改进意见，根据岗位关键点修改简历，评估匹配度（含 STAR 原则重构）
+【数据库】
+- chatclow_ai_agent 插入 4 条记录，user_id=1（管理员），model_id=1，状态启用
+
+2026-06-06 23:45:00 用户个人文档 RAG 系统（用户级知识库）
+---------------------------------------------------------
+【需求】用户不需要看到项目知识库，改为个人文档标签；用户上传文档后 agent 自动 RAG 检索
+【新增文件】
+- entity/UserDocument.java → 用户文档实体（id/userId/fileName/fileType/fileSize/filePath/content/chunkCount/status/errorMsg/createdDt）
+- entity/UserChunk.java → 用户文档切片实体（id/userId/docId/chunkIndex/content/tokenCount/vectorData/contentHash/createdDt）
+- mapper/UserDocumentMapper.java → MyBatis Plus 接口
+- mapper/UserChunkMapper.java → MyBatis Plus 接口
+- service/UserDocumentService.java → 接口：upload/listByUserId/delete/search
+- service/impl/UserDocumentServiceImpl.java → 实现：上传→提取文本→切片→去重→向量化→入库，搜索（余弦相似度）
+- controller/UserDocumentController.java → REST API（upload/list/delete/search/count）
+- api/userDoc.js → 前端接口封装
+【后端改动】
+- RagStep.java → process() 末尾新增用户个人 RAG 检索（userId 隔离），结果以"【用户个人文档】"前缀拼入 ctx.ragContext
+- schema-h2.sql → 新增 chatclow_user_document / chatclow_user_chunk 建表语句
+【前端改动】
+- Chat.vue → 导航卡片"知识库"改为"个人文档"，点击打开内嵌面板（上传拖拽区 + 文档列表 + 删除）
+- Chat.vue → 删除 Knowledge.vue 嵌入引用，activePanel 值改为 'user-docs'
+【数据库变更】
+- CREATE TABLE chatclow_user_document（用户文档主表）
+- CREATE TABLE chatclow_user_chunk（文档切片表，含向量数据）
+
+2026-06-06 23:50:00 上传文档后状态轮询 + 点击文档跳回聊天
+---------------------------------------------------------
+【修复】上传文档后一直显示"解析中"不刷新 → 新增轮询机制
+- doUpload 上传成功后启动定时器（每2秒刷新文档列表）
+- 所有文档处理完成（status 3或4）自动停止轮询
+- 离开个人文档面板时自动停止轮询
+【修复】点击左侧会话列表不跳转回聊天
+- switchConversation 新增 activePanel.value = 'chat'
+【修复】Vue 警告 ArrowLeft 未定义
+- Chat.vue 图标导入列表新增 ArrowLeft
+
+2026-06-07 02:00:00 多项修复与功能改进
+-----------------------------------------
+【修复】异步处理文档事务问题
+- UserDocumentServiceImpl.java → 使用 TransactionSynchronizationManager.afterCommit()
+  确保事务提交后再启动异步线程处理切片，修复上传后一直"解析中"的问题
+【修复】智能体详情页移除右上角编辑按钮
+- Admin.vue → agent-detail-actions 删除编辑按钮
+【修复】用量统计、个人文档嵌入面板移除返回聊天按钮
+- Chat.vue → token-stats、user-docs 面板删除返回按钮
+- TokenStats.vue → 组件内部返回按钮删除并清理 ArrowLeft 导入
+【新增】智能体头像支持图片
+- Admin.vue → avatarStyle() 支持 agent.avatar 字段，有头像时显示 background-image
+- Chat.vue → 智能体卡片和管理面板支持显示头像图片
+- 数据库 chatclow_ai_agent.avatar 设置 6 个智能体头像
+- chatclow-web/public/avatars/ 新增 6 个头像图片
+【新增】聊天对话 AI/用户头像替换为图片
+- Chat.vue → 消息区 AI 头像显示 /avatars/对话头像.jpg
+- Chat.vue → 消息区用户头像显示 /avatars/对话头像本人.jpg
+- chatclow-web/public/avatars/ 新增 对话头像.jpg、对话头像本人.jpg
+【优化】使用帮助引导动画改为飞行动画
+- animateCardIn/Out 从 1.8s 缩放改为 0.5s 飞行（与新手引导一致）
+- 去除 height:auto 不能做 CSS transition 的问题
+
+2026-06-07 02:28:00 大模型新增"测试连接"按钮
+-----------------------------------------
+【需求】管理员新增或编辑模型时，可以点击"测试连接"验证 API 是否可用
+【后端改动】
+- AiModelController.java → 新增 POST /api/model/test 端点
+- AiModelService.java → 接口新增 testConnection() 方法
+- AiModelServiceImpl.java → 实现 testConnection()：用 OkHttp 发送
+  { model, messages:["Hi"], max_tokens:5, stream:false } 验证 API 响应
+【前端改动】
+- api/model.js → 新增 testModelConnection() 接口
+- Admin.vue → 模型对话框底部新增"测试连接"按钮（带 loading 状态）
+
+2026-06-07 02:30:00 智能体绑定模型对接大模型管理
+-----------------------------------------
+【改动】
+- Admin.vue → 智能体详情页"绑定模型"从硬编码（DeepSeek-V3/Qwen-Max/GPT-4o）
+  改为 v-for 遍历 modelList 动态渲染
+- Admin.vue → 新建/编辑智能体对话框"绑定模型"从 el-input-number 手动输入 ID
+  改为 el-select 下拉选择，与已有模型数据对接
+- Admin.vue → openAddAgentDialog 默认取第一个可用模型 ID
+
+2026-06-07 02:30:00 修复智能体绑定不存在的模型导致对话报错
+-----------------------------------------------
+【问题】管理员删除模型后重新添加，自增 ID 变化导致智能体引用不存在的 modelId
+【修复数据】chatclow_ai_agent 中 model_id=1 的记录更新为 3
+【后端加固】ContextAssemblyStep → 加载模型时如果绑定的模型不存在，
+自动取第一个启用模型兜底，避免直接抛异常
+【日志】2026-06-07 02:30:00 修复智能体绑定模型不存在问题
+
+2026-06-07 03:35:00 修复工具名拼接 bug（get_current_timenull）
+-----------------------------------------------
+【问题】小米 MiMo API 流式返回 tool_calls 时，function.name 的分片 chunk
+中 name 字段为 null，Jackson 的 asText() 在 NullNode 上返回字符串 "null"，
+拼接后变成 get_current_time + null = "get_current_timenull"
+【修复】ModelCallStep.java → fn.has("name") + isEmpty() 改为
+fn.path("name").isTextual()，只有真正字符串值才拼接
+【数据库】chatclow_ai_conversation 新增 model_id BIGINT, model_name VARCHAR(100)
+【前端】Chat.vue → 会话列表每条显示模型名称（红色小字）
+【数据库】chatclow_ai_conversation 新增 agent_id BIGINT
+
+2026-06-07 03:40:00 切换会话时自动切换对应的智能体
+-----------------------------------------------
+【需求】点击会话列表中的对话时，自动切换到当时使用的智能体
+【后端】ContextAssemblyStep → 新建会话时保存 agentId
+【数据库】chatclow_ai_conversation 新增 agent_id 列
+【前端】Chat.vue → switchConversation 中根据 conv.agentId 自动切换 currentAgentId
+
+2026-06-07 03:45:00 新对话按钮跳转到对话面板
+-------------------------------------------
+【改动】Chat.vue → newConversation() 新增 activePanel.value = 'chat'
+
+2026-06-07 03:50:00 使用帮助引导动画优化（减速 + 防闪烁 + 来源修正）
+---------------------------------------------------------
+【改动清单】
+1. 动画减速：飞入 0.5s→1s，飞回 0.4s→0.8s
+2. 防闪烁：showHelp() 先定位卡片再显示遮罩，避免遮罩单独出现
+3. 遮罩淡入：help-overlay 新增 0.3s ease 淡入动画
+4. 步进时卡片不隐藏：animateCardOut 在步进时不再隐藏卡片，直接切换内容重飞
+5. 动画来源修正：
+   - Step 1（智能体）：从 agentCardRef（模板 ref）定位，避免 querySelector 偏差
+   - Step 2（个人文档）：从 .nav-card-pink 定位 ✓
+   - Step 3（对话消息）：从 .conv-item 定位（原为加号按钮）
+6. 代码清理：showHelp 不再依赖 nextTick + animateCardIn，直接内联动画
+
+2026-06-07 Chat.vue 前端代码重构
+------------------------------
+
+【重构内容】
+1. 模板 `v-for="m in models"` → `v-for="m in modelList"`（消除未声明变量引用）
+2. 删除重复声明的 `agentForm` / `agentRules`（声明了两次，第二次覆盖第一次）
+3. 移除冗余的 `loadModels()` 函数，统一使用 `loadModelList()`
+4. `showHelp()` 改用 `animateCardIn('.agent-card', 560)` 消除代码重复
+
+【改动文件】
+- chatclow-web/src/views/Chat.vue
+
+2026-06-07 使用帮助新增第4步：Token用量查询
+----------------------------------------
+
+【新增】
+- Step 4：用量统计引导，从 .nav-card-blue（用量统计卡片）飞入/飞回
+- finishStep() 增加 step 3→4 过渡，step 4 为最后一步关闭引导
+
+【修复】
+- animateCardOut 飞回位置修正：两帧法锁定状态、agentCardRef 兜底 querySelector、
+  增加 height/padding:0 让缩放更精准
+- animateCardIn 支持传 DOM 元素或 CSS 选择器（showHelp 改用 agentCardRef）
+
+【改动文件】
+- chatclow-web/src/views/Chat.vue
+
+2026-06-07 04:30:00 对话上传文件/图片功能（完整实现）
+------------------------------------------------------
+【需求】用户可以在对话中上传文件（尤其是图片），让 AI 直接分析内容，比如"分析这张图片"
+不走 RAG 知识库，是对话级别的文件上传
+
+【后端改动】
+- UserDocument.java → 新增 source（rag/chat）、conversationId 字段
+- ChatRequest.java → 新增 fileIds 字段（List<Long>）
+- ChatContext.java → requestMessages 类型 List<Map<String,String>> → List<Map<String,Object>>
+- ChatContext.java → 新增 chatFiles、fileIds 字段
+- ChatService.java → chat/chatStream 新增 fileIds 参数
+- ChatServiceImpl.java → 传递 fileIds 到 ChatContext
+- ChatController.java → 新增 POST /api/chat/upload 文件上传端点
+- WebMvcConfig.java → addResourceHandlers 映射 /uploads/**
+- ContextAssemblyStep.java → 有 fileIds 时查询 UserDocumentMapper
+- MessageBuildStep.java → 支持 content 数组格式（图片 base64 + 文字 + 文件）
+- SyncAiCallStep.java → List<Map<String,String>> → List<Map<String,Object>>
+- ToolCallHelper.java → List<Map<String,String>> → List<Map<String,Object>>
+- ModelCallStep.java → 无类型变化（已使用 Object）
+- schema-h2.sql → chatclow_user_document 加 source、conversation_id 列
+
+【前端改动】
+- api/chat.js → chatStream 传 fileIds 参数；新增 uploadChatFile() 接口
+- Chat.vue → 输入框旁加 Paperclip 上传按钮 + 文件预览缩略图（支持图片预览）
+- Chat.vue → 发送消息时携带 fileIds，发送后自动清除已上传文件
+- Chat.vue → 切换智能体/新建会话时清除文件列表
+- Chat.vue → CSS：.input-row / .chat-file-preview / .chat-file-item / .chat-file-thumb
+
+【测试修复】
+- ChatServiceImplTest.java → chat/chatStream 加 null fileIds 参数
+- ChatControllerTest.java → mock 加 any() fileIds 参数
+- ToolCallHelperTest.java → Map<String,String> → Map<String,Object>
+- MessageBuildStepTest.java → 类型适配 + String 转型
+
+2026-06-07 04:40:00 修复 MySQL 缺少 source 字段错误
+-----------------------------------------------
+【问题】上传文件时报 Unknown column 'source'，因为 MySQL 表结构没有更新
+【修复】ALTER TABLE chatclow_user_document ADD COLUMN source VARCHAR(20) DEFAULT 'rag'
+       ALTER TABLE chatclow_user_document ADD COLUMN conversation_id BIGINT
+
+2026-06-07 修复管理员用户管理操作列溢出
+------------------------------------------
+【问题】操作栏按钮超出表格边界
+【改动】
+- Admin.vue → 邮箱列 720px→260px，角色列 160px→120px，剩余次数 120px→100px，Token消耗 189px→150px
+- Admin.vue → 操作列 260px→340px，按钮 padding: 5px 10px，flex-shrink:0 防止挤压
+
+2026-06-07 管理员用户管理列宽最终调整
+------------------------------------------
+【改动】
+- Admin.vue → 操作列 260px→520px（扩大一倍），表头居中，按钮居中
+- Admin.vue → 邮箱列 260px→520px（扩大一倍）
+- Admin.vue → 去掉多余的表格宽度 calc 和内边距覆盖，列直接贴表格右边框
+
+2026-06-07 04:50:00 修复 DeepSeek 多模态格式 + 消息气泡显示图片
+---------------------------------------------------------------
+【踩坑记录】DeepSeek V4 Flash API 不支持图片识别！
+- 查文档说 DeepSeek V4 Flash 有多模态（284B/13B 模型已开源）
+- 但实际上 API 层面没开放，只有官方 App/Web 端的"识图模式"能用
+- 发 image_data 字段不会报错，但模型直接忽略图片内容
+- 小米 MiMo 同样不支持（404）
+- 结论：DeepSeek/MiMo 当前都是纯文本模型，不用折腾多模态了
+
+【后端改动】
+- MessageBuildStep.java → 去掉所有 base64 图片处理代码
+  图片上传后仅在消息文本中标记"[用户上传了图片: xxx.jpg]"
+  txt/md 文件正常传内容，其他文件仅标记文件名
+
+【前端改动】
+- Chat.vue → sendMessage 保存文件信息到 userMsg.files
+- Chat.vue → 模板消息气泡显示图片缩略图/文件名
+- Chat.vue → CSS：.msg-files / .msg-file / .msg-file-img
+
+2026-06-07 05:00:00 新增系统公告功能（悬浮公告按钮 + 管理员管理）
+-----------------------------------------------------------------
+【需求】用户页面顶部居中悬浮公告按钮，点击展开公告内容；管理员可增删改公告
+【后端新增】
+- entity/Announcement.java → 公告实体（id/title/content/status/createdDt/updatedDt）
+- mapper/AnnouncementMapper.java → MyBatis Plus 接口
+- service/AnnouncementService.java → 接口：add/listAll/getLatestEnabled/update/deleteById
+- service/impl/AnnouncementServiceImpl.java → 实现
+- controller/AnnouncementController.java → REST API（GET /latest、admin CRUD）
+- schema-h2.sql → 新增 chatclow_announcement 建表
+【前端新增】
+- api/announcement.js → 接口封装
+【前端改动】
+- Chat.vue → toolbar 新增居中公告按钮（Notification 图标 + "公告"文字）
+- Chat.vue → 点击按钮展开悬浮公告弹窗（标题 + 内容 + 关闭按钮）
+- Chat.vue → 有公告时加载最新一条展示，onMounted 自动获取
+- Admin.vue → 侧边栏新增"公告管理"卡片（紫色 #f0abfc）
+- Admin.vue → 公告列表展示（标题/内容预览/状态/时间 + 编辑/删除按钮）
+- Admin.vue → 新增/编辑公告弹窗（标题 + 内容 + 启用/禁用开关）
+【数据库变更】
+- CREATE TABLE chatclow_announcement（系统公告表）
+
+2026-06-07 13:10:00 修复删除文档未清理向量存储（PG残留孤立数据）
+-----------------------------------------------------------------
+【问题】前端删除文档后，MySQL chatclow_rag_document 记录已删，但
+PostgreSQL rag_vectors 中的向量数据未清理，留下孤立数据
+【根因】RagDocumentServiceImpl.deleteById() 只删文档记录，
+没有调用向量存储的 deleteByDocument() 方法
+【修复】RagDocumentServiceImpl.java → deleteById() 新增三步：
+  1. 先查文档获取 kbId
+  2. 调用 ragChunkService.deleteByDocumentId() 清理 MySQL 切片
+  3. 通过 VectorStoreFactory 获取向量存储实例，
+     调用 deleteByDocument() 清理 PG / MongoDB 向量
+【数据清理】docker exec chatclow-pg → DELETE FROM rag_vectors WHERE doc_id = 24
+  清理了 8 条孤立向量（对应前端已删的"张文亮(1).pdf"）
+
+2026-06-07 13:30:00 修复三大删除未级联问题（知识库/模型/智能体）
+-----------------------------------------------------------------
+【问题1】删除知识库 → 文档和向量数据残留
+- RagKnowledgeBaseServiceImpl.deleteById() 只删 KB 记录
+- 重建同名 KB 后上传文档，existsByHash 查到旧向量跳过入库
+【修复1】RagKnowledgeBaseServiceImpl.java → deleteById() 新增：
+  1. 查出 KB 下所有文档
+  2. 逐个调用 ragDocumentService.deleteById() 级联清理向量
+  3. 最后删 KB 记录
+
+【问题2】删除大模型 → 智能体引用已失效的 modelId
+- AiModelServiceImpl.deleteById() 只删模型记录
+- 重新添加模型后自增 ID 变了，旧 modelId 指向错误模型
+- ContextAssemblyStep 有兜底，但会报错再恢复，体验差
+【修复2】AiModelServiceImpl.java → deleteById() 新增：
+  1. 自动找一个其他已启用的模型作为替补
+  2. 将所有引用被删模型的 agent 的 modelId 更新为替补模型
+  3. 最后删模型记录（@Transactional）
+
+【问题3】删除智能体 → 关联会话和工具函数残留
+- AiAgentServiceImpl.deleteById() 只删 agent 记录
+- 历史会话的 agentId 指向已删除的 agent，前端显示空白
+- 自定义工具函数孤立
+【修复3】AiAgentServiceImpl.java → deleteById() 新增：
+  1. 查出所有关联会话，逐个调用 deleteConversation() 级联删聊天记录
+  2. 删除该智能体的自定义工具（保留全局工具 agentId=-1）
+  3. 最后删智能体记录（@Transactional）
+
+【改动文件】
+- RagKnowledgeBaseServiceImpl.java
+- AiModelServiceImpl.java
+- AiAgentServiceImpl.java
+
+2026-06-07 14:20:00 删除用户"剩余次数"字段（无用功能）
+---------------------------------------------------
+【需求】用户剩余次数属性无用，全链路删除
+【后端改动】
+- User.java → 删除 totals 字段
+- UserServiceImpl.java → 删除 user.setTotals(100)
+【前端改动】
+- Admin.vue → 删除用户表格"剩余次数"列
+- Admin.vue → 删除用户编辑表单"剩余次数"表单项
+- Admin.vue → userForm 初始化去掉 totals: 100
+【测试改动】
+- schema-h2.sql → 删除 totals 列定义
+【数据库变更】
+- ALTER TABLE chatclow_ai_user DROP COLUMN totals;
+
+2026-06-07 15:00:00 修复对话卡死不报错问题
+---------------------------------------------------
+【问题】责任链中 Step 抛异常时，DONE 事件不发，
+前端一直等待导致界面卡死，无任何提示
+【修复】ChatServiceImpl.java → catch 块先发 SseEvent.error()
+再关闭连接，前端展示错误信息
+
+2026-06-07 15:10:00 新增对话终止按钮（手动停止AI回复）
+---------------------------------------------------
+【需求】AI回复卡死时用户可手动终止
+【前端改动】
+- Chat.vue → 输入框发送按钮改为：streaming 时显示红色停止按钮，
+  非 streaming 时显示正常发送按钮
+- Chat.vue → 新增 stopStream() 函数，通过 AbortController 中断请求
+- Chat.vue → sendMessage() 创建 AbortController 传给 chatStream
+- Chat.vue → catch 块区分 AbortError（显示"已终止"）和其他错误
+- chat.js → chatStream 新增 signal 参数传入 fetch
+
+2026-06-07 15:30:00 替换 new Thread() 为线程池 sseExecutor
+---------------------------------------------------
+【问题】文档上传异步处理用 new Thread()，高并发下可能 OOM
+【修复】
+- RagDocumentServiceImpl.java → new Thread() 改为 sseExecutor.execute()
+- UserDocumentServiceImpl.java → new Thread() 改为 sseExecutor.execute()
+【线程池配置】
+- corePoolSize=5, maxPoolSize=20, queueCapacity=100
+
+2026-06-07 16:00:00 全量替换 System.out/err 为 SLF4J 日志
+---------------------------------------------------
+【改动】9 个文件，约 35 处 System.out/err → log.info/warn
+- ChatChainImpl.java → 新增 Logger，2 处替换
+- RagStep.java → 新增 Logger，1 处替换
+- MongoDBVectorStore.java → 新增 Logger，5 处替换
+- VectorStoreFactory.java → 新增 Logger，5 处替换
+- EmbeddingServiceImpl.java → 新增 Logger，3 处替换
+- RerankServiceImpl.java → 新增 Logger，8 处替换
+- UserDocumentServiceImpl.java → 新增 Logger，2 处替换
+- VectorSearchServiceImpl.java → 新增 Logger，7 处替换
+- RagDocumentServiceImpl.java → 已有 Logger，13 处替换
+
+2026-06-07 16:30:00 API 密钥加密存储（AES-128）
+---------------------------------------------------
+【新增文件】
+- util/AesUtil.java → AES 加密/解密/脱敏工具类
+【后端改动】
+- application.yml → 新增 crypto.key 配置项
+- AsyncConfig.java → @PostConstruct 初始化 AesUtil 密钥
+- AiModelServiceImpl.java → add 加密 / update 检测脱敏值 /
+  list/getById 返回脱敏 / testConnection 自动解密
+- ContextAssemblyStep.java → 加载模型时解密 apiKey
+  （旧明文密钥兼容：解密失败自动使用原值）
+
+2026-06-07 17:00:00 SSE 断线重连 — 重新发送按钮
+---------------------------------------------------
+【问题】网络波动导致 SSE 连接断开，对话中断无恢复手段
+【前端改动】
+- Chat.vue → catch 块非终止错误时保存 retryText
+- Chat.vue → 输入区上方显示黄色重试横幅 + "重新发送"按钮
+- Chat.vue → retryLastMessage() 清除空白 AI 回复，填入原文重发
+- Chat.vue → 正常完成/done 时清空 retryText
+【效果】
+- 网络波动断了 → 显示黄色横幅 → 点"重新发送" → 重新请求 AI

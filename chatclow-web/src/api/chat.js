@@ -8,8 +8,9 @@ export function chatSync(data) {
 /**
  * SSE 流式聊天
  * 用 fetch + ReadableStream 逐行读取
+ * @param {AbortSignal} [signal] - 可选，用于中断请求
  */
-export async function chatStream({ agentId, userId, message, conversationId, memoryEnabled }, onEvent) {
+export async function chatStream({ agentId, userId, message, conversationId, memoryEnabled, fileIds }, onEvent, signal) {
   const token = localStorage.getItem('token')
   const response = await fetch('/api/chat/send-stream', {
     method: 'POST',
@@ -17,7 +18,8 @@ export async function chatStream({ agentId, userId, message, conversationId, mem
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {})
     },
-    body: JSON.stringify({ agentId, userId, message, conversationId, memoryEnabled })
+    body: JSON.stringify({ agentId, userId, message, conversationId, memoryEnabled, fileIds }),
+    signal
   })
 
   if (!response.ok) {
@@ -80,4 +82,11 @@ export function deleteConversation(id) {
 // 清除会话记忆
 export function clearConversationMemory(convId) {
   return request.delete(`/conversation/memory/${convId}`)
+}
+
+// 对话文件上传
+export function uploadChatFile(file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request.post('/chat/upload', formData)
 }

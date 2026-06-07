@@ -4,6 +4,8 @@ import com.chatclow.service.RerankService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import okhttp3.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -20,6 +22,8 @@ import java.util.*;
  */
 @Service
 public class RerankServiceImpl implements RerankService {
+
+    private static final Logger log = LoggerFactory.getLogger(RerankServiceImpl.class);
 
     // 从 application.yml 读取 SiliconFlow API Key（和 Embedding 共用同一个 key）
     @Value("${rag.embedding.api-key}")
@@ -45,7 +49,7 @@ public class RerankServiceImpl implements RerankService {
             return new ArrayList<>();
         }
 
-        System.out.println("[RAG-Rerank] 开始重排序，候选文档数: " + documents.size() + "，查询: " + query);
+        log.info("[RAG-Rerank] 开始重排序，候选文档数: " + documents.size() + "，查询: " + query);
 
         try {
             // 1. 构建请求体（JSON 格式）
@@ -71,7 +75,7 @@ public class RerankServiceImpl implements RerankService {
             try (Response response = httpClient.newCall(request).execute()) {
                 if (!response.isSuccessful()) {
                     String errorBody = response.body() != null ? response.body().string() : "无响应体";
-                    System.err.println("[RAG-Rerank] 请求失败: HTTP " + response.code() + "，body: " + errorBody);
+                    log.warn("[RAG-Rerank] 请求失败: HTTP " + response.code() + "，body: " + errorBody);
                     return fallback(documents, topK);  // 失败兜底
                 }
 
@@ -83,7 +87,7 @@ public class RerankServiceImpl implements RerankService {
                 // {"results": [{"index":2,"relevance_score":0.98}, {"index":0,"relevance_score":0.85}, ...]}
                 JsonNode results = jsonResponse.get("results");
                 if (results == null || !results.isArray()) {
-                    System.err.println("[RAG-Rerank] 返回格式异常，无 results 字段");
+                    log.warn("[RAG-Rerank] 返回格式异常，无 results 字段");
                     return fallback(documents, topK);
                 }
 
@@ -94,10 +98,10 @@ public class RerankServiceImpl implements RerankService {
                     int index = result.get("index").asInt();
                     double score = result.get("relevance_score").asDouble();
                     if (score < threshold) {
-                        System.out.println("[RAG-Rerank] 跳过低分: 原索引=" + index + ", 分数=" + score + " < 阈值=" + threshold);
+                        log.info("[RAG-Rerank] 跳过低分: 原索引=" + index + ", 分数=" + score + " < 阈值=" + threshold);
                         continue;
                     }
-                    System.out.println("[RAG-Rerank] 重排序结果 " + i + ": 原索引=" + index + ", 分数=" + score);
+                    log.info("[RAG-Rerank] 重排序结果 " + i + ": 原索引=" + index + ", 分数=" + score);
                     reranked.add(documents.get(index));
                 }
 
@@ -110,12 +114,12 @@ public class RerankServiceImpl implements RerankService {
                     }
                 }
 
-                System.out.println("[RAG-Rerank] 重排序完成，返回 " + reranked.size() + " 条");
+                log.info("[RAG-Rerank] 重排序完成，返回 " + reranked.size() + " 条");
                 return reranked;
             }
 
         } catch (IOException e) {
-            System.err.println("[RAG-Rerank] 请求异常: " + e.getMessage());
+            log.warn("[RAG-Rerank] 请求异常: " + e.getMessage());
             return fallback(documents, topK);  // 异常兜底
         }
     }
@@ -123,7 +127,7 @@ public class RerankServiceImpl implements RerankService {
     /** 兜底策略：直接返回前 topK 条（原顺序） */
     private List<String> fallback(List<String> documents, int topK) {
         int limit = Math.min(topK, documents.size());
-        System.out.println("[RAG-Rerank] 使用兜底策略，返回前 " + limit + " 条");
+        log.info("[RAG-Rerank] 使用兜底策略，返回前 " + limit + " 条");
         return new ArrayList<>(documents.subList(0, limit));
     }
 }

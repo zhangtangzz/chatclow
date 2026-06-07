@@ -34,12 +34,12 @@ public class ToolCallHelper {
      * @return 可变消息列表（已包含 assistant tool_calls 消息）
      */
     public List<Map<String, Object>> prepareMessages(
-            List<Map<String, String>> originalMessages,
+            List<Map<String, Object>> originalMessages,
             List<ChatContext.ToolCallInfo> toolCalls,
             String reasoningContent) {
 
         List<Map<String, Object>> messages = new ArrayList<>();
-        for (Map<String, String> msg : originalMessages) {
+        for (Map<String, Object> msg : originalMessages) {
             messages.add(new HashMap<>(msg));
         }
 

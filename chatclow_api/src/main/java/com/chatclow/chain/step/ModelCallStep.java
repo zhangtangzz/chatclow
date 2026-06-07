@@ -144,9 +144,9 @@ public class ModelCallStep implements ChatChainStep {
                                     if (tc.has("type") && !tc.path("type").asText().isEmpty())
                                         stc.type = tc.path("type").asText();
                                     JsonNode fn = tc.path("function");
-                                    if (fn.has("name") && !fn.path("name").asText().isEmpty())
+                                    if (fn.path("name").isTextual())
                                         stc.funcName += fn.path("name").asText();
-                                    if (fn.has("arguments") && !fn.path("arguments").asText().isEmpty())
+                                    if (fn.path("arguments").isTextual())
                                         stc.funcArgs.append(fn.path("arguments").asText());
                                 }
                                 continue;

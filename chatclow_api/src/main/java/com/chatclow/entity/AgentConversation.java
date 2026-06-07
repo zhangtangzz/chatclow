@@ -30,4 +30,13 @@ public class AgentConversation {
 
     /** Token 累计消耗量 */
     private Integer totalTokens;
+
+    /** 使用的模型ID */
+    private Long modelId;
+
+    /** 使用的模型名称 */
+    private String modelName;
+
+    /** 关联的智能体ID */
+    private Long agentId;
 }

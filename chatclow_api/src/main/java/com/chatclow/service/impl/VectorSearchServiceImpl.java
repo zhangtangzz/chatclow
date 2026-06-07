@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.chatclow.entity.RagChunk;
 import com.chatclow.mapper.RagChunkMapper;
 import com.chatclow.service.VectorSearchService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -15,6 +17,8 @@ import java.util.stream.Collectors;
  */
 @Service
 public class VectorSearchServiceImpl implements VectorSearchService {
+
+    private static final Logger log = LoggerFactory.getLogger(VectorSearchServiceImpl.class);
 
     @Autowired
     private RagChunkMapper ragChunkMapper;
@@ -35,7 +39,9 @@ public class VectorSearchServiceImpl implements VectorSearchService {
     public List<RagChunk> search(float[] questionVector, Long kbId, int topK, float threshold) {
         // 1. 查出该知识库下所有有向量的切片
         LambdaQueryWrapper<RagChunk> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(RagChunk::getKbId, kbId);
+        if (kbId != null) {
+            wrapper.eq(RagChunk::getKbId, kbId);
+        }
         wrapper.isNotNull(RagChunk::getVectorData);  // 只查有向量的
         List<RagChunk> allChunks = ragChunkMapper.selectList(wrapper);
 
@@ -44,7 +50,7 @@ public class VectorSearchServiceImpl implements VectorSearchService {
         }
 
         // 2. 计算每条切片与问题的相似度
-        System.out.println("[Vector-Diag] 问题向量维度=" + questionVector.length + "，知识库切片总数=" + allChunks.size() + "，阈值=" + threshold);
+        log.info("[Vector-Diag] 问题向量维度=" + questionVector.length + "，知识库切片总数=" + allChunks.size() + "，阈值=" + threshold);
 
         List<ScoredChunk> scoredChunks = new ArrayList<>();
         int parseFailCount = 0;
@@ -62,7 +68,7 @@ public class VectorSearchServiceImpl implements VectorSearchService {
             // 维度不匹配诊断（只打印前3条）
             if (chunkVector.length != questionVector.length) {
                 if (dimMismatchCount < 3) {
-                    System.out.println("[Vector-Diag] 维度不匹配！问题=" + questionVector.length + "维，切片(id=" + chunk.getId() + ")=" + chunkVector.length + "维");
+                    log.info("[Vector-Diag] 维度不匹配！问题=" + questionVector.length + "维，切片(id=" + chunk.getId() + ")=" + chunkVector.length + "维");
                 }
                 dimMismatchCount++;
                 continue;
@@ -71,7 +77,7 @@ public class VectorSearchServiceImpl implements VectorSearchService {
             // 收集最高分和前5个分数样本
             if (maxSimilarity == null || similarity > maxSimilarity) maxSimilarity = similarity;
             if (i < 5) {
-                System.out.println("[Vector-Diag] 切片(id=" + chunk.getId() + ") 相似度=" + String.format("%.6f", similarity));
+                log.info("[Vector-Diag] 切片(id=" + chunk.getId() + ") 相似度=" + String.format("%.6f", similarity));
             }
             if (similarity >= threshold) {
                 scoredChunks.add(new ScoredChunk(chunk, similarity));
@@ -80,7 +86,7 @@ public class VectorSearchServiceImpl implements VectorSearchService {
             }
         }
 
-        System.out.println("[Vector-Diag] 统计：解析失败=" + parseFailCount + "，维度不匹配=" + dimMismatchCount
+        log.info("[Vector-Diag] 统计：解析失败=" + parseFailCount + "，维度不匹配=" + dimMismatchCount
                 + "，低于阈值=" + belowThresholdCount + "，通过=" + scoredChunks.size()
                 + "，最高相似度=" + (maxSimilarity != null ? String.format("%.6f", maxSimilarity) : "N/A"));
 
@@ -109,13 +115,15 @@ public class VectorSearchServiceImpl implements VectorSearchService {
         List<String> keywords = extractKeywords(query.trim());
 
         if (keywords.isEmpty()) {
-            System.out.println("[RAG-Keyword] 未提取到有效关键词，查询词: " + query);
+            log.info("[RAG-Keyword] 未提取到有效关键词，查询词: " + query);
             return new ArrayList<>();
         }
 
-        // 2. 构建查询条件：同一个知识库 + 内容包含任一关键词
+        // 2. 构建查询条件：内容包含任一关键词（kbId 不为 null 时按知识库过滤）
         LambdaQueryWrapper<RagChunk> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(RagChunk::getKbId, kbId);
+        if (kbId != null) {
+            wrapper.eq(RagChunk::getKbId, kbId);
+        }
 
         // .and() 里面的逻辑：关键词之间用 OR 连接（匹配到任何一个就算命中）
         wrapper.and(w -> {
@@ -134,7 +142,7 @@ public class VectorSearchServiceImpl implements VectorSearchService {
         wrapper.last("LIMIT " + (topK * 3));
         List<RagChunk> results = ragChunkMapper.selectList(wrapper);
 
-        System.out.println("[RAG-Keyword] 关键字检索命中 " + results.size() + " 条，查询词: " + query + "，提取关键词: " + keywords);
+        log.info("[RAG-Keyword] 关键字检索命中 " + results.size() + " 条，查询词: " + query + "，提取关键词: " + keywords);
 
         return results.stream().limit(topK).collect(Collectors.toList());
     }
@@ -300,7 +308,7 @@ public class VectorSearchServiceImpl implements VectorSearchService {
             keywordResults = keywordSearch(query, kbId, topK);
         }
 
-        System.out.println("[RAG-Hybrid] 向量检索: " + vectorResults.size() + " 条，关键字检索: " + keywordResults.size() + " 条（keywordEnabled=" + keywordEnabled + "）");
+        log.info("[RAG-Hybrid] 向量检索: " + vectorResults.size() + " 条，关键字检索: " + keywordResults.size() + " 条（keywordEnabled=" + keywordEnabled + "）");
 
         // 2. 合并去重：用 LinkedHashMap 保持顺序
         //    向量结果排在前面（相关性更强），关键字结果补充在后面

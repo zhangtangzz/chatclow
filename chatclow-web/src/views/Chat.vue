@@ -11,10 +11,14 @@
       </div>
 
       <!-- 智能体卡片（点击弹出管理面板） -->
-      <div class="agent-card" @click="showAgentPanel = true">
-        <div class="agent-card-avatar">{{ getAgentEmoji(currentAgent?.name || '') }}</div>
+      <div class="agent-card" ref="agentCardRef" @click="showAgentPanel = true">
+        <div class="agent-card-avatar">
+          <img v-if="currentAgent?.avatar" :src="currentAgent.avatar" class="agent-avatar-img" />
+          <span v-else>{{ getAgentEmoji(currentAgent?.name || '') }}</span>
+        </div>
         <div class="agent-card-info">
           <div class="agent-card-name">{{ currentAgent?.name || '选择智能体' }}</div>
+          <div class="agent-card-model" v-if="currentAgent">{{ getModelName(currentAgent.modelId) }}</div>
           <div class="agent-card-hint">{{ currentAgent ? '点击切换' : '点击选择' }}</div>
         </div>
         <el-icon class="agent-card-arrow" :size="18"><ArrowRight /></el-icon>
@@ -38,7 +42,10 @@
           @click="switchConversation(conv)"
         >
           <el-icon><ChatDotRound /></el-icon>
-          <span class="conv-title">{{ conv.title || '新对话' }}</span>
+          <div class="conv-title-wrap">
+            <span class="conv-title">{{ conv.title || '新对话' }}</span>
+            <span class="conv-model" v-if="conv.modelName">{{ conv.modelName }}</span>
+          </div>
           <div v-if="conv.memoryEnabled" class="memory-dot" title="已启用记忆" />
           <el-button
             class="conv-delete-btn"
@@ -53,15 +60,15 @@
 
       <!-- 底部导航卡片 -->
       <div class="sidebar-footer">
-        <div class="nav-card nav-card-pink" @click="$router.push('/knowledge')">
+        <div class="nav-card nav-card-pink" @click="activePanel = 'user-docs'">
           <div class="nav-card-icon"><el-icon :size="22"><FolderOpened /></el-icon></div>
           <div class="nav-card-text">
-            <div class="nav-card-title">知识库</div>
-            <div class="nav-card-desc">管理 RAG 文档</div>
+            <div class="nav-card-title">个人文档</div>
+            <div class="nav-card-desc">上传文件构建个人知识库</div>
           </div>
           <el-icon class="nav-card-arrow" :size="16"><ArrowRight /></el-icon>
         </div>
-        <div class="nav-card nav-card-blue" @click="$router.push('/token-stats')">
+        <div class="nav-card nav-card-blue" @click="activePanel = 'token-stats'">
           <div class="nav-card-icon"><el-icon :size="22"><DataAnalysis /></el-icon></div>
           <div class="nav-card-text">
             <div class="nav-card-title">用量统计</div>
@@ -81,7 +88,7 @@
     </div>
 
     <!-- 右侧聊天区域 -->
-    <div class="chat-main">
+    <div class="chat-main" v-if="activePanel === 'chat'">
       <!-- 聊天顶部工具栏 -->
       <div class="chat-toolbar" v-if="currentAgentId">
         <div class="toolbar-left">
@@ -92,6 +99,24 @@
             <el-icon><Memo /></el-icon>
             记忆已启用
           </el-tag>
+        </div>
+        <!-- 公告按钮（居中） -->
+        <div class="toolbar-center" v-if="announcementData">
+          <div class="announcement-btn" @click="toggleAnnouncement">
+            <el-icon :size="16"><Notification /></el-icon>
+            <span>公告</span>
+            <span v-if="!announcementVisible" class="announcement-dot" />
+          </div>
+          <transition name="announcement-fade">
+            <div v-if="announcementVisible" class="announcement-popup" @click.stop>
+              <div class="announcement-popup-header">
+                <el-icon :size="18"><Notification /></el-icon>
+                <span class="announcement-popup-title">{{ announcementData.title || '系统公告' }}</span>
+                <el-button :icon="Close" size="small" text @click="announcementVisible = false" />
+              </div>
+              <div class="announcement-popup-content">{{ announcementData.content || '暂无公告内容' }}</div>
+            </div>
+          </transition>
         </div>
         <div class="toolbar-right">
           <!-- 使用帮助卡片（炫酷闪烁） -->
@@ -148,13 +173,21 @@
         <div v-for="(msg, idx) in messages" :key="idx" :class="['message', msg.role]">
           <div class="message-avatar">
             <el-avatar
+              v-if="msg.role === 'user'"
               :size="36"
-              :style="{ background: msg.role === 'user' ? 'var(--primary)' : 'var(--accent)' }"
-            >
-              {{ msg.role === 'user' ? '我' : 'AI' }}
-            </el-avatar>
+              src="/avatars/对话头像本人.jpg"
+            />
+            <el-avatar v-else :size="36" src="/avatars/对话头像.jpg" />
           </div>
           <div class="message-content">
+            <!-- 上传的文件 -->
+            <div v-if="msg.files && msg.files.length > 0" class="msg-files">
+              <div v-for="(f, fi) in msg.files" :key="fi" class="msg-file">
+                <img v-if="['png','jpg','jpeg','gif','webp','bmp'].includes(f.fileType)" :src="f.url" class="msg-file-img" />
+                <el-icon v-else :size="20"><Document /></el-icon>
+                <span class="msg-file-name">{{ f.fileName }}</span>
+              </div>
+            </div>
             <!-- 工具调用状态 -->
             <div v-if="msg.toolStatus" class="tool-status">
               <el-icon class="is-loading"><Loading /></el-icon>
@@ -172,7 +205,7 @@
         <!-- 正在输入提示 -->
         <div v-if="streaming && !streamText" class="message assistant">
           <div class="message-avatar">
-            <el-avatar :size="36" :style="{ background: '#67c23a' }">AI</el-avatar>
+            <el-avatar :size="36" src="/avatars/对话头像.jpg" />
           </div>
           <div class="message-content">
             <div class="typing-indicator">
@@ -184,19 +217,84 @@
 
       <!-- 输入区域 -->
       <div class="chat-input">
-        <el-input
-          v-model="inputMessage"
-          placeholder="输入消息，Enter 发送"
-          :disabled="streaming"
-          @keyup.enter="sendMessage"
-          size="large"
-          clearable
-        >
-          <template #append>
-            <el-button type="primary" :icon="Promotion" :loading="streaming" @click="sendMessage" />
-          </template>
-        </el-input>
+        <!-- 上传文件预览 -->
+        <div v-if="uploadedFiles.length > 0" class="chat-file-preview">
+          <div v-for="(f, idx) in uploadedFiles" :key="idx" class="chat-file-item">
+            <img v-if="['png','jpg','jpeg','gif','webp','bmp'].includes(f.fileType)" :src="f.url" class="chat-file-thumb" />
+            <el-icon v-else :size="20"><Document /></el-icon>
+            <span class="chat-file-name">{{ f.fileName }}</span>
+            <el-button :icon="Close" size="small" text @click="removeChatFile(idx)" />
+          </div>
+        </div>
+        <div v-if="retryText" class="retry-banner">
+          <span>连接断开，回复可能不完整</span>
+          <el-button size="small" type="warning" @click="retryLastMessage">重新发送</el-button>
+        </div>
+        <div class="input-row">
+          <input ref="chatFileInputRef" type="file" hidden accept="image/*,.pdf,.docx,.txt,.md" @change="handleChatFileSelect" />
+          <el-button class="upload-btn" :icon="Paperclip" @click="chatFileInputRef?.click()" :disabled="streaming" />
+          <el-input
+            v-model="inputMessage"
+            placeholder="输入消息，Enter 发送"
+            :disabled="streaming"
+            @keyup.enter="sendMessage"
+            size="large"
+            clearable
+          >
+            <template #append>
+              <el-button v-if="!streaming" type="primary" :icon="Promotion" @click="sendMessage" />
+              <el-button v-else type="danger" :icon="Close" @click="stopStream" class="stop-btn" />
+            </template>
+          </el-input>
+        </div>
       </div>
+    </div>
+
+    <!-- 个人文档面板 -->
+    <div v-else-if="activePanel === 'user-docs'" class="embedded-panel">
+      <div class="embedded-header">
+        <h2>个人文档</h2>
+      </div>
+      <div class="user-docs-content">
+        <!-- 上传区域 -->
+        <div class="upload-area" @click="triggerUpload" @dragover.prevent @drop.prevent="handleDrop">
+          <input ref="fileInputRef" type="file" hidden accept=".pdf,.docx,.txt,.md" @change="handleFileSelected" />
+          <el-icon :size="32"><UploadFilled /></el-icon>
+          <p class="upload-text">点击或拖拽上传文档</p>
+          <p class="upload-hint">支持 PDF、DOCX、TXT、MD</p>
+        </div>
+
+        <!-- 文档列表 -->
+        <div class="doc-list" v-loading="userDocsLoading">
+          <div v-if="userDocs.length === 0" class="doc-empty">
+            还没有上传过文档
+          </div>
+          <div v-for="doc in userDocs" :key="doc.id" class="doc-item" @click="goToChat" style="cursor:pointer">
+            <div class="doc-icon">
+              <el-icon :size="20"><Document /></el-icon>
+            </div>
+            <div class="doc-info">
+              <div class="doc-name">{{ doc.fileName }}</div>
+              <div class="doc-meta">
+                <el-tag size="small" :type="statusType(doc.status)" class="doc-status">
+                  {{ statusText(doc.status) }}
+                </el-tag>
+                <span class="doc-size">{{ formatSize(doc.fileSize) }}</span>
+              </div>
+            </div>
+            <el-button size="small" text type="danger" :icon="Delete"
+              @click.stop="handleDeleteDoc(doc)" class="doc-delete-btn" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 嵌入的用量统计 -->
+    <div v-else-if="activePanel === 'token-stats'" class="embedded-panel">
+      <div class="embedded-header">
+        <h2>用量统计</h2>
+      </div>
+      <TokenStats />
     </div>
 
     <!-- 新建/编辑智能体弹窗 -->
@@ -210,7 +308,7 @@
         </el-form-item>
         <el-form-item label="模型" prop="modelId">
           <el-select v-model="agentForm.modelId" placeholder="选择模型" style="width: 100%">
-            <el-option v-for="m in models" :key="m.id" :label="m.modelName" :value="m.id" />
+            <el-option v-for="m in modelList" :key="m.id" :label="m.name || m.modelName" :value="m.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="系统提示词" prop="systemPrompt">
@@ -223,11 +321,7 @@
         </el-form-item>
         <el-form-item label="启用RAG">
           <el-switch v-model="agentForm.kbEnabled" :active-value="1" :inactive-value="0" />
-        </el-form-item>
-        <el-form-item v-if="agentForm.kbEnabled === 1" label="知识库">
-          <el-select v-model="agentForm.kbId" placeholder="选择知识库（可选）" clearable style="width: 100%">
-            <el-option v-for="kb in knowledgeBases" :key="kb.id" :label="kb.name" :value="kb.id" />
-          </el-select>
+          <span style="margin-left:8px;font-size:12px;color:var(--fg-muted)">{{ agentForm.kbEnabled === 1 ? '开启后自动检索所有知识库' : '' }}</span>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -248,9 +342,13 @@
 
           <!-- 当前选中的智能体详情 -->
           <div v-if="currentAgent" class="panel-current">
-            <div class="panel-current-avatar">{{ getAgentEmoji(currentAgent.name) }}</div>
+            <div class="panel-current-avatar">
+              <img v-if="currentAgent.avatar" :src="currentAgent.avatar" class="agent-avatar-img" />
+              <span v-else>{{ getAgentEmoji(currentAgent.name) }}</span>
+            </div>
             <div class="panel-current-info">
               <div class="panel-current-name">{{ currentAgent.name }}</div>
+              <div class="panel-current-model">{{ getModelName(currentAgent.modelId) }}</div>
               <div class="panel-current-desc">{{ currentAgent.description || '暂无描述' }}</div>
             </div>
             <div class="panel-current-actions">
@@ -268,7 +366,10 @@
               :class="['panel-agent-item', { active: agent.id === currentAgentId }]"
               @click="selectAgentFromPanel(agent)"
             >
-              <span class="panel-agent-emoji">{{ getAgentEmoji(agent.name) }}</span>
+              <span class="panel-agent-emoji">
+                <img v-if="agent.avatar" :src="agent.avatar" class="agent-avatar-img" />
+                <span v-else>{{ getAgentEmoji(agent.name) }}</span>
+              </span>
               <span class="panel-agent-name">{{ agent.name }}</span>
               <el-tag v-if="agent.id === currentAgentId" size="small" class="panel-agent-tag" type="danger">使用中</el-tag>
             </div>
@@ -283,7 +384,10 @@
               :class="['panel-agent-item', { active: agent.id === currentAgentId }]"
               @click="selectAgentFromPanel(agent)"
             >
-              <span class="panel-agent-emoji">{{ getAgentEmoji(agent.name) }}</span>
+              <span class="panel-agent-emoji">
+                <img v-if="agent.avatar" :src="agent.avatar" class="agent-avatar-img" />
+                <span v-else>{{ getAgentEmoji(agent.name) }}</span>
+              </span>
               <span class="panel-agent-name">{{ agent.name }}</span>
               <el-tag v-if="agent.id === currentAgentId" size="small" class="panel-agent-tag" type="danger">使用中</el-tag>
             </div>
@@ -356,8 +460,18 @@
           </p>
           <div class="rag-arrow-hint">点击空白处下一步 →</div>
         </div>
-        <!-- Step 3: 对话选择内容 -->
+        <!-- Step 3: Token 用量查询 -->
         <div v-if="helpStep === 3" class="trans-content">
+          <div class="rag-icon">📊</div>
+          <h3 class="rag-title">Token 用量查询</h3>
+          <p class="rag-text">
+            在左侧「用量统计」卡片中可以查看你的 Token 消耗概览。
+            <br>包括每次对话的 Token 使用量和总消耗统计。
+          </p>
+          <div class="rag-arrow-hint">点击空白处下一步 →</div>
+        </div>
+        <!-- Step 4: 对话选择内容 -->
+        <div v-if="helpStep === 4" class="trans-content">
           <h2 class="conv-step-title">💬 开始对话</h2>
           <p class="conv-step-desc">创建一个新对话，或继续之前的对话</p>
           <div class="help-conv-list">
@@ -387,7 +501,8 @@
 import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue'
 import { useUserStore } from '../stores/user'
 import { useRouter } from 'vue-router'
-import { chatStream, getConversations, createConversation, getConversationRecords, deleteConversation, clearConversationMemory } from '../api/chat'
+import { chatStream, getConversations, createConversation, getConversationRecords, deleteConversation, clearConversationMemory, uploadChatFile } from '../api/chat'
+import { getLatestAnnouncement } from '../api/announcement'
 import { getAgentList, addAgent, updateAgent, deleteAgent } from '../api/agent'
 import { getModelList } from '../api/model'
 import { getKbList } from '../api/knowledge'
@@ -400,90 +515,194 @@ import {
   ChatLineSquare,
   Promotion,
   Loading,
+  Paperclip,
   Delete,
   DataAnalysis,
   Close,
   Edit,
   ArrowRight,
   QuestionFilled,
+  ArrowLeft,
+  Document,
+  UploadFilled,
+  Notification,
 } from '@element-plus/icons-vue'
 import MarkdownIt from 'markdown-it'
+import TokenStats from './TokenStats.vue'
+import { uploadUserDoc, getUserDocList, deleteUserDoc } from '../api/userDoc'
 
 const md = new MarkdownIt({ html: false, breaks: true })
 
 const router = useRouter()
 const userStore = useUserStore()
 
-// 数据
+// ===== 数据 =====
 const agents = ref([])
+const modelList = ref([])
+const modelMap = computed(() => {
+  const map = {}
+  modelList.value.forEach(m => { map[m.id] = m })
+  return map
+})
 const currentAgentId = ref(null)
+const activePanel = ref('chat')  // 'chat' | 'user-docs' | 'token-stats'
 const conversations = ref([])
 const currentConvId = ref(null)
 const messages = ref([])
 const inputMessage = ref('')
 const streaming = ref(false)
+const abortController = ref(null)
+const retryText = ref('')
 const messagesRef = ref(null)
 const streamText = ref('')    // 流式文字（响应式 ref，驱动 DOM 更新）
 let rawBuffer = ''             // 原始缓冲（非响应式，快速收集 SSE 数据）
-let streamTimer = null         // setInterval 句柄
-// 记忆开关
-const memoryEnabled = ref(true) // 默认启用
+let streamTimer = null         // RAF 句柄
+const memoryEnabled = ref(true)
 
-// 智能体管理面板
-const showAgentPanel = ref(false)
+// ===== 公告 =====
+const announcementData = ref(null)
+const announcementVisible = ref(false)
 
-// 当前选中的智能体对象
-const currentAgent = computed(() => {
-  return agents.value.find(a => a.id === currentAgentId.value) || null
-})
-
-// 管理员发布的智慧助手
-const adminAgents = computed(() => {
-  return agents.value.filter(a => a.userId !== userStore.userId)
-})
-
-// 用户自己的个性化助手
-const myAgents = computed(() => {
-  return agents.value.filter(a => a.userId === userStore.userId)
-})
-
-// 从面板选择智能体
-function selectAgentFromPanel(agent) {
-  if (agent.id !== currentAgentId.value) {
-    currentAgentId.value = agent.id
-    onAgentChange()
-  }
-  showAgentPanel.value = false
+async function loadAnnouncement() {
+  try {
+    const res = await getLatestAnnouncement()
+    if (res.code === 200 && res.data) {
+      announcementData.value = res.data
+    }
+  } catch (_) {}
 }
 
-// 新建/编辑智能体相关
+function toggleAnnouncement() {
+  announcementVisible.value = !announcementVisible.value
+}
+
+// ===== 对话文件上传 =====
+const uploadedFiles = ref([])
+const chatFileInputRef = ref(null)
+
+// ===== 智能体管理面板 =====
+const showAgentPanel = ref(false)
 const showAgentDialog = ref(false)
 const agentCreating = ref(false)
 const isEditingAgent = ref(false)
 const editingAgentId = ref(null)
-const models = ref([])
 const knowledgeBases = ref([])
 const agentFormRef = ref(null)
-const agentForm = ref({
-  name: '',
-  description: '',
-  modelId: null,
-  systemPrompt: '',
-  kbEnabled: 0,
-  kbId: null,
-})
+const agentForm = ref({ name: '', description: '', modelId: null, systemPrompt: '', kbEnabled: 0, kbId: null })
 const agentRules = {
   name: [{ required: true, message: '请输入智能体名称', trigger: 'blur' }],
   modelId: [{ required: true, message: '请选择模型', trigger: 'change' }],
   systemPrompt: [{ required: true, message: '请输入系统提示词', trigger: 'blur' }],
 }
 
+// ===== 个人文档 =====
+const userDocs = ref([])
+const userDocsLoading = ref(false)
+const fileInputRef = ref(null)
+let docPollTimer = null
+
+const currentAgent = computed(() => agents.value.find(a => a.id === currentAgentId.value) || null)
+const adminAgents = computed(() => agents.value.filter(a => a.userId !== userStore.userId))
+const myAgents = computed(() => agents.value.filter(a => a.userId === userStore.userId))
+
+// ===== 个人文档函数 =====
+function triggerUpload() { fileInputRef.value?.click() }
+
+function handleDrop(e) {
+  const file = e.dataTransfer.files[0]
+  if (file) doUpload(file)
+}
+
+function handleFileSelected(e) {
+  const file = e.target.files[0]
+  if (file) doUpload(file)
+  e.target.value = ''
+}
+
+async function doUpload(file) {
+  try {
+    await uploadUserDoc(file)
+    ElMessage.success('上传成功，后台处理中...')
+    loadUserDocs()
+    startDocPolling()
+  } catch (e) {
+    ElMessage.error('上传失败：' + (e.response?.data?.message || e.message))
+  }
+}
+
+function startDocPolling() {
+  stopDocPolling()
+  docPollTimer = setInterval(async () => {
+    try {
+      const res = await getUserDocList()
+      userDocs.value = res.data || []
+      const hasProcessing = userDocs.value.some(d => d.status === 1 || d.status === 2)
+      if (!hasProcessing) stopDocPolling()
+    } catch (_) {}
+  }, 2000)
+}
+
+function stopDocPolling() {
+  if (docPollTimer) { clearInterval(docPollTimer); docPollTimer = null }
+}
+
+function goToChat() { activePanel.value = 'chat' }
+
+// ===== 对话文件上传函数 =====
+async function handleChatFileSelect(e) {
+  const file = e.target.files[0]
+  if (!file) return
+  e.target.value = ''
+  try {
+    const res = await uploadChatFile(file)
+    uploadedFiles.value.push(res.data)
+    ElMessage.success('文件已上传')
+  } catch (e) {
+    ElMessage.error('文件上传失败：' + (e.response?.data?.message || e.message))
+  }
+}
+
+function removeChatFile(idx) {
+  uploadedFiles.value.splice(idx, 1)
+}
+
+async function loadUserDocs() {
+  userDocsLoading.value = true
+  try {
+    const res = await getUserDocList()
+    userDocs.value = res.data || []
+  } catch (e) {
+    console.error('加载文档列表失败', e)
+  } finally { userDocsLoading.value = false }
+}
+
+async function handleDeleteDoc(doc) {
+  try {
+    await ElMessageBox.confirm(`确定删除「${doc.fileName}」？`, '删除确认', { type: 'warning' })
+    await deleteUserDoc(doc.id)
+    ElMessage.success('已删除')
+    loadUserDocs()
+  } catch (e) { /* 取消 */ }
+}
+
+function statusText(status) { return ({ 1: '解析中', 2: '处理中', 3: '已完成', 4: '失败' })[status] || '未知' }
+function statusType(status) { return ({ 1: 'warning', 2: 'warning', 3: 'success', 4: 'danger' })[status] || 'info' }
+function formatSize(bytes) {
+  if (!bytes) return ''
+  const kb = bytes / 1024
+  return kb < 1024 ? kb.toFixed(1) + ' KB' : (kb / 1024).toFixed(1) + ' MB'
+}
+
+watch(activePanel, (val) => {
+  if (val === 'user-docs') { loadUserDocs() } else { stopDocPolling() }
+})
+
 // 打开新建智能体弹窗
 function openCreateAgent() {
   isEditingAgent.value = false
   editingAgentId.value = null
   resetAgentForm()
-  loadModels()
+  loadModelList()
   loadKnowledgeBases()
   showAgentDialog.value = true
 }
@@ -502,7 +721,7 @@ function openEditAgent() {
     kbEnabled: agent.kbEnabled || 0,
     kbId: agent.kbId || null,
   }
-  loadModels()
+  loadModelList()
   loadKnowledgeBases()
   showAgentDialog.value = true
 }
@@ -608,6 +827,15 @@ async function loadAgents() {
   }
 }
 
+async function loadModelList() {
+  try {
+    const res = await getModelList()
+    modelList.value = res.data || []
+  } catch (e) {
+    console.error('加载模型列表失败:', e)
+  }
+}
+
 // 加载会话列表
 async function loadConversations() {
   if (!userStore.userId || userStore.userId === 0) return
@@ -622,15 +850,6 @@ async function loadConversations() {
   }
 }
 
-// 加载模型列表
-async function loadModels() {
-  try {
-    const res = await getModelList()
-    models.value = res.data || []
-  } catch (e) {
-    console.error('加载模型列表失败:', e)
-  }
-}
 
 // 加载知识库列表
 async function loadKnowledgeBases() {
@@ -649,16 +868,17 @@ async function handleSaveAgent() {
 
   agentCreating.value = true
   try {
+    // RAG 开启时检索全部知识库，不绑定特定 KB
+    const formData = { ...agentForm.value, kbId: null }
     if (isEditingAgent.value) {
       await updateAgent({
         id: editingAgentId.value,
-        ...agentForm.value,
+        ...formData,
       })
       ElMessage.success('智能体更新成功')
     } else {
       await addAgent({
-        ...agentForm.value,
-        userId: userStore.userId,
+        ...formData,
         status: 1,
       })
       ElMessage.success('智能体创建成功')
@@ -676,12 +896,15 @@ async function handleSaveAgent() {
 function onAgentChange() {
   messages.value = []
   currentConvId.value = null
+  uploadedFiles.value = []
 }
 
 // 新建会话
 function newConversation() {
+  activePanel.value = 'chat'
   messages.value = []
   currentConvId.value = null
+  uploadedFiles.value = []
 }
 
 // 删除会话
@@ -700,7 +923,13 @@ async function handleDeleteConversation(conv) {
 
 // 切换会话
 async function switchConversation(conv) {
+  activePanel.value = 'chat'
   currentConvId.value = conv.id
+  // 切换会话时自动切换到对应的智能体
+  if (conv.agentId) {
+    const agent = agents.value.find(a => a.id === conv.agentId)
+    if (agent) currentAgentId.value = agent.id
+  }
   messages.value = []
   try {
     const res = await getConversationRecords(conv.id)
@@ -774,7 +1003,13 @@ async function sendMessage() {
   }
 
   inputMessage.value = ''
-  messages.value.push({ role: 'user', content: text })
+  const userMsg = { role: 'user', content: text }
+  if (uploadedFiles.value.length > 0) {
+    userMsg.files = uploadedFiles.value.map(f => ({
+      fileName: f.fileName, fileType: f.fileType, url: f.url, id: f.id
+    }))
+  }
+  messages.value.push(userMsg)
   streaming.value = true
   scrollToBottom()
 
@@ -782,8 +1017,13 @@ async function sendMessage() {
   const msgIndex = messages.value.length - 1
   scrollToBottom()
 
-  // 启动 setInterval 逐字渲染（每 30ms 从 rawBuffer 搬 3 个字符到 streamText ref）
+  const fileIds = uploadedFiles.value.map(f => f.id)
+
+  // 启动逐字渲染
   startStreamRender()
+
+  // 创建 AbortController 用于终止请求
+  abortController.value = new AbortController()
 
   try {
     await chatStream(
@@ -793,6 +1033,7 @@ async function sendMessage() {
         message: text,
         conversationId: currentConvId.value,
         memoryEnabled: memoryEnabled.value,
+        fileIds,
       },
       (event) => {
         switch (event.type) {
@@ -815,6 +1056,7 @@ async function sendMessage() {
           case 'done':
             commitStreamText(msgIndex)
             streaming.value = false
+            retryText.value = ''
             break
           case 'error':
             commitStreamText(msgIndex)
@@ -822,13 +1064,47 @@ async function sendMessage() {
             streaming.value = false
             break
         }
-      }
+      },
+      abortController.value.signal
     )
+    // 正常结束，清除重试标记
+    retryText.value = ''
   } catch (e) {
     commitStreamText(msgIndex)
-    messages.value[msgIndex].content += '\n\n❌ 请求失败，请重试'
+    if (e.name === 'AbortError') {
+      messages.value[msgIndex].content += '\n\n⏹️ 已终止'
+      retryText.value = ''
+    } else {
+      messages.value[msgIndex].content += '\n\n❌ 连接断开，回复不完整'
+      retryText.value = text
+    }
     streaming.value = false
   }
+  // 发送后清除已上传的文件
+  uploadedFiles.value = []
+}
+
+// 重新发送断线的消息
+function retryLastMessage() {
+  const text = retryText.value
+  if (!text) return
+  retryText.value = ''
+  inputMessage.value = text
+  // 移除最后一条空白 AI 回复（如果有）
+  if (messages.value.length > 0 && messages.value[messages.value.length - 1].role === 'assistant') {
+    messages.value.pop()
+  }
+  nextTick(() => sendMessage())
+}
+
+// 手动终止流式回复
+function stopStream() {
+  if (abortController.value) {
+    abortController.value.abort()
+    abortController.value = null
+  }
+  stopStreamRender()
+  streaming.value = false
 }
 
 // 退出登录
@@ -840,6 +1116,7 @@ function handleLogout() {
 // 使用帮助引导
 const showHelpTutorial = ref(false)
 const helpStep = ref(1)
+const agentCardRef = ref(null)
 const helpCardRef = ref(null)
 const helpCard = reactive({ visible: false, style: {} })
 let helpAnimating = false
@@ -855,9 +1132,9 @@ function formatConvTime(dt) {
 }
 
 function showHelp() {
-  showHelpTutorial.value = true
   helpStep.value = 1
-  nextTick(() => animateCardIn('.agent-card', 560))
+  showHelpTutorial.value = true
+  animateCardIn(agentCardRef.value, 560)
 }
 
 function advanceHelp() {
@@ -872,91 +1149,101 @@ function handleHelpBgClick() {
   animateCardOut()
 }
 
-// 从指定元素位置放大卡片到居中
-function animateCardIn(sourceSel, cardW) {
-  const source = document.querySelector(sourceSel)
-  if (!source) return
-  const src = source.getBoundingClientRect()
+// 从指定元素位置飞到屏幕中间（类似新手引导的飞行动画）
+function animateCardIn(source, cardW) {
+  const el = typeof source === 'string' ? document.querySelector(source) : source
+  if (!el) return
+  const src = el.getBoundingClientRect()
   const cw = cardW || 380
-  const ch = 320
   const cx = (window.innerWidth - cw) / 2
-  const cy = (window.innerHeight - ch) / 2
+  const cy = 120
 
-  // 先定位到 source 位置，极小
+  // 初始：在 source 位置，极小
   helpCard.style = {
     position: 'fixed',
     left: src.left + 'px',
     top: src.top + 'px',
     width: src.width + 'px',
-    height: src.height + 'px',
-    transform: 'scale(0.15)',
-    opacity: '0',
     transition: 'none',
-    borderRadius: '0',
-    padding: '0',
+    opacity: '0',
+    transform: 'scale(0.3)',
   }
   helpCard.visible = true
   helpAnimating = true
 
-  // 下一帧放大到居中
+  // 下一帧：飞到屏幕中间展开
   requestAnimationFrame(() => {
     helpCard.style = {
       position: 'fixed',
       left: cx + 'px',
       top: cy + 'px',
       width: cw + 'px',
-      height: 'auto',
-      transform: 'scale(1)',
       opacity: '1',
-      transition: 'all 1.8s cubic-bezier(0.34, 1.56, 0.64, 1)',
-      borderRadius: '0',
-      padding: '32px 36px',
+      transform: 'scale(1)',
+      transition: 'all 1s cubic-bezier(0.34, 1.56, 0.64, 1)',
     }
-    setTimeout(() => { helpAnimating = false }, 1850)
+    setTimeout(() => { helpAnimating = false }, 1050)
   })
 }
 
-// 缩小回到 source 位置
+// 从屏幕中间飞回 source 位置
 function animateCardOut() {
   if (helpAnimating) return
   helpAnimating = true
 
-  const sourceSel = helpStep.value === 1 ? '.agent-card' : (helpStep.value === 2 ? '.nav-card-pink' : '.sidebar-header .el-button--primary')
-  const source = document.querySelector(sourceSel)
+  const source = helpStep.value === 1
+    ? (agentCardRef.value || document.querySelector('.agent-card'))
+    : document.querySelector(
+        helpStep.value === 2 ? '.nav-card-pink'
+        : helpStep.value === 3 ? '.nav-card-blue'
+        : '.conv-item')
   if (!source) { finishStep(); return }
   const src = source.getBoundingClientRect()
 
-  helpCard.style = {
-    position: 'fixed',
-    left: src.left + 'px',
-    top: src.top + 'px',
-    width: src.width + 'px',
-    height: src.height + 'px',
-    transform: 'scale(0.1)',
-    opacity: '0',
-    transition: 'all 1.5s cubic-bezier(0.4, 0, 0.2, 1)',
-    borderRadius: '0',
-    padding: '0',
-  }
+  // 两帧法：先锁定当前状态（取消过渡），下一帧再飞到目标位置
+  helpCard.style = { ...helpCard.style, transition: 'none' }
 
-  setTimeout(() => {
-    helpCard.visible = false
-    helpAnimating = false
-    finishStep()
-  }, 1550)
+  requestAnimationFrame(() => {
+    helpCard.style = {
+      position: 'fixed',
+      left: src.left + 'px',
+      top: src.top + 'px',
+      width: src.width + 'px',
+      height: src.height + 'px',
+      padding: '0',
+      opacity: '0',
+      transform: 'scale(0.3)',
+      transition: 'all 1.2s cubic-bezier(0.4, 0, 0.2, 1)',
+    }
+
+    setTimeout(() => {
+      highlightSource(source)
+      // 等高亮闪烁结束后再进入下一步
+      setTimeout(() => {
+        if (helpStep.value === 4) {
+          helpCard.visible = false
+          helpAnimating = false
+          closeHelpTutorial()
+        } else {
+          helpAnimating = false
+          finishStep()
+        }
+      }, 1200)
+    }, 1300)
+  })
 }
 
 function finishStep() {
   if (helpStep.value === 1) {
-    // Step 1 结束 → 进入 Step 2，从 RAG 卡片放大
     helpStep.value = 2
     nextTick(() => animateCardIn('.nav-card-pink', 380))
   } else if (helpStep.value === 2) {
-    // Step 2 结束 → 进入 Step 3，从加号按钮放大
     helpStep.value = 3
-    nextTick(() => animateCardIn('.sidebar-header .el-button--primary', 420))
+    nextTick(() => animateCardIn('.nav-card-blue', 380))
+  } else if (helpStep.value === 3) {
+    helpStep.value = 4
+    nextTick(() => animateCardIn('.conv-item', 380))
   } else {
-    // Step 3 结束 → 关闭引导
     closeHelpTutorial()
   }
 }
@@ -966,6 +1253,13 @@ function closeHelpTutorial() {
   helpStep.value = 1
   helpCard.visible = false
   helpAnimating = false
+}
+
+// 目标卡片高亮闪烁
+function highlightSource(el) {
+  if (!el) return
+  el.classList.add('highlight-flash')
+  setTimeout(() => el.classList.remove('highlight-flash'), 1200)
 }
 
 function helpSelectAgent(agent) {
@@ -992,6 +1286,13 @@ function quickQuestion(text) {
   sendMessage()
 }
 
+// 从面板选择智能体
+function selectAgentFromPanel(agent) {
+  currentAgentId.value = agent.id
+  showAgentPanel.value = false
+  onAgentChange()
+}
+
 // ===== 新用户引导：选择智能体 =====
 const showOnboarding = ref(false)
 const cardRefs = reactive({})
@@ -1010,6 +1311,11 @@ function getAgentEmoji(name) {
     if (name.toLowerCase().includes(key.toLowerCase())) return emoji
   }
   return '🤖'
+}
+
+function getModelName(modelId) {
+  const m = modelMap.value[modelId]
+  return m ? m.name : '未知模型'
 }
 
 function selectAgentWithAnimation(agent) {
@@ -1065,6 +1371,8 @@ onMounted(async () => {
   // 先加载会话，再加载智能体（引导弹窗依赖 conversations 判断）
   await loadConversations()
   await loadAgents()
+  await loadModelList()
+  loadAnnouncement()
 })
 </script>
 
@@ -1132,7 +1440,7 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 12px;
-  background: var(--bg-card);
+  background: linear-gradient(135deg, #fed7aa 0%, #fdba74 100%);
   border: 3px solid var(--border-color);
   box-shadow: var(--shadow-hard-sm);
   cursor: pointer;
@@ -1153,9 +1461,15 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   font-size: 22px;
-  background: rgba(255,77,77,0.08);
+  background: rgba(251,146,60,0.15);
   border: 2px solid var(--border-color);
   flex-shrink: 0;
+  overflow: hidden;
+}
+.agent-avatar-img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
 }
 .agent-card-info {
   flex: 1;
@@ -1169,6 +1483,15 @@ onMounted(async () => {
   text-overflow: ellipsis;
   white-space: nowrap;
   line-height: 1.3;
+}
+.agent-card-model {
+  font-family: var(--font-hand);
+  font-size: 11px;
+  color: var(--primary);
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .agent-card-hint {
   font-family: var(--font-hand);
@@ -1249,8 +1572,23 @@ onMounted(async () => {
   line-height: 18px;
 }
 
-.conv-title {
+.conv-title-wrap {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.conv-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.conv-model {
+  font-family: var(--font-hand);
+  font-size: 10px;
+  color: var(--primary);
+  opacity: 0.7;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1351,16 +1689,24 @@ onMounted(async () => {
   transition: all 0.2s;
 }
 .nav-card-pink {
-  background: linear-gradient(135deg, #fef0f0 0%, #fce4ec 100%);
+  background: linear-gradient(135deg, #bfdbfe 0%, #93c5fd 100%);
 }
 .nav-card-pink:hover {
-  background: linear-gradient(135deg, #fce4ec 0%, #f8ced8 100%);
+  background: linear-gradient(135deg, #93c5fd 0%, #60a5fa 100%);
 }
 .nav-card-blue {
-  background: linear-gradient(135deg, #ebf4ff 0%, #dbeafe 100%);
+  background: linear-gradient(135deg, #a7f3d0 0%, #6ee7b7 100%);
 }
 .nav-card-blue:hover {
-  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  background: linear-gradient(135deg, #6ee7b7 0%, #34d399 100%);
+}
+.nav-card-danger {
+  background: linear-gradient(135deg, #fecaca 0%, #fca5a5 100%);
+  border-color: var(--border-color);
+}
+.nav-card-danger:hover {
+  background: var(--primary);
+  border-color: var(--border-color);
 }
 
 /* ===== 右侧聊天区 ===== */
@@ -1397,6 +1743,97 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+/* ===== 公告按钮（居中） ===== */
+.toolbar-center {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  z-index: 10;
+}
+.announcement-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  background: var(--bg-card);
+  border: 2px solid var(--border-color);
+  box-shadow: var(--shadow-hard-sm);
+  cursor: pointer;
+  font-family: var(--font-marker);
+  font-size: 14px;
+  color: var(--fg-default);
+  transition: all 0.2s;
+  position: relative;
+}
+.announcement-btn:hover {
+  box-shadow: var(--shadow-hard);
+  transform: translateY(-1px);
+}
+.announcement-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--primary);
+  border: 1px solid var(--border-color);
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  animation: announcement-pulse 1.5s ease-in-out infinite;
+}
+@keyframes announcement-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+.announcement-popup {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 420px;
+  max-height: 320px;
+  background: var(--bg-card);
+  border: 3px solid var(--border-color);
+  box-shadow: var(--shadow-hard-lg);
+  z-index: 999;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.announcement-fade-enter-active,
+.announcement-fade-leave-active {
+  transition: all 0.25s ease-out;
+}
+.announcement-fade-enter-from,
+.announcement-fade-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-8px);
+}
+.announcement-popup-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px;
+  border-bottom: 3px solid var(--border-color);
+  background: var(--bg-page);
+}
+.announcement-popup-title {
+  flex: 1;
+  font-family: var(--font-marker);
+  font-size: 16px;
+  color: var(--fg-default);
+}
+.announcement-popup-content {
+  padding: 16px;
+  font-family: var(--font-hand);
+  font-size: 14px;
+  color: var(--fg-default);
+  line-height: 1.7;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 /* ===== 使用帮助卡片（五彩闪烁） ===== */
@@ -1689,6 +2126,7 @@ onMounted(async () => {
   font-size: 28px;
   background: rgba(255,77,77,0.08);
   border: 2px solid var(--border-color);
+  overflow: hidden;
 }
 .panel-current-info {
   flex: 1;
@@ -1698,6 +2136,12 @@ onMounted(async () => {
   font-family: var(--font-marker);
   font-size: 18px;
   color: var(--fg-default);
+}
+.panel-current-model {
+  font-family: var(--font-hand);
+  font-size: 12px;
+  color: var(--primary);
+  margin: 2px 0;
 }
 .panel-current-desc {
   font-family: var(--font-hand);
@@ -1923,6 +2367,12 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
+  animation: helpOverlayIn 0.3s ease both;
+}
+
+@keyframes helpOverlayIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 .help-bg {
   position: absolute;
@@ -1998,6 +2448,129 @@ onMounted(async () => {
 }
 
 /* ===== 过渡卡片（Step 2 & 3 共用） ===== */
+/* 嵌入面板 */
+.embedded-panel {
+  flex: 1;
+  overflow-y: auto;
+  background: var(--bg-page);
+  display: flex;
+  flex-direction: column;
+}
+.embedded-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  border-bottom: 3px solid var(--border-color);
+  background: var(--bg-card);
+}
+.embedded-header h2 {
+  font-family: var(--font-marker);
+  font-size: 18px;
+  color: var(--fg-default);
+  margin: 0;
+}
+.embedded-panel .stats-header .el-button.text {
+  display: none;
+}
+
+/* 个人文档面板 */
+.user-docs-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+.upload-area {
+  border: 3px dashed var(--border-color);
+  border-radius: 0;
+  padding: 30px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: var(--bg-card);
+  margin-bottom: 20px;
+}
+.upload-area:hover {
+  border-color: var(--primary);
+  background: rgba(255,77,77,0.03);
+}
+.upload-text {
+  font-family: var(--font-hand);
+  font-size: 15px;
+  color: var(--fg-default);
+  margin: 8px 0 4px;
+}
+.upload-hint {
+  font-family: var(--font-hand);
+  font-size: 12px;
+  color: var(--fg-muted);
+  margin: 0;
+}
+.doc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.doc-empty {
+  text-align: center;
+  padding: 40px 0;
+  font-family: var(--font-hand);
+  color: var(--fg-muted);
+  font-size: 14px;
+}
+.doc-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--bg-card);
+  border: 3px solid var(--border-color);
+  box-shadow: var(--shadow-hard-sm);
+  transition: all 0.2s;
+}
+.doc-item:hover {
+  box-shadow: var(--shadow-hard);
+}
+.doc-icon {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(45,45,45,0.05);
+  border: 2px solid var(--border-color);
+  flex-shrink: 0;
+}
+.doc-info {
+  flex: 1;
+  min-width: 0;
+}
+.doc-name {
+  font-family: var(--font-marker);
+  font-size: 14px;
+  color: var(--fg-default);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.doc-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+.doc-size {
+  font-family: var(--font-hand);
+  font-size: 11px;
+  color: var(--fg-muted);
+}
+.doc-status {
+  font-family: var(--font-hand);
+}
+.doc-delete-btn {
+  flex-shrink: 0;
+}
+
 .help-trans-card {
   position: fixed;
   background: var(--bg-card);
@@ -2005,6 +2578,7 @@ onMounted(async () => {
   box-shadow: var(--shadow-hard-lg);
   z-index: 9999;
   overflow: hidden;
+  padding: 32px 36px;
 }
 .trans-content {
   text-align: center;
@@ -2090,6 +2664,118 @@ onMounted(async () => {
   font-family: var(--font-hand);
   font-size: 12px;
   color: var(--fg-muted);
+}
+
+/* ===== 高亮闪烁动画（引导飞回时触发） ===== */
+@keyframes highlight-pulse {
+  0% { outline: 0 solid rgba(255,77,77,0); outline-offset: 0; }
+ 15% { outline: 5px solid rgba(255,77,77,0.85); outline-offset: -2px; }
+ 50% { outline: 5px solid rgba(255,77,77,0.85); outline-offset: -2px; }
+100% { outline: 0 solid rgba(255,77,77,0); outline-offset: 0; }
+}
+.highlight-flash {
+  animation: highlight-pulse 1.1s ease-out;
+  position: relative;
+  z-index: 1;
+}
+
+/* ===== 对话文件上传 ===== */
+.input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.input-row .el-input {
+  flex: 1;
+}
+.upload-btn {
+  border: 2px solid var(--border-color);
+  flex-shrink: 0;
+}
+.retry-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 8px 16px;
+  margin-bottom: 8px;
+  background: #fffbeb;
+  border: 2px solid #f59e0b;
+  border-radius: 8px;
+  font-size: 14px;
+}
+.stop-btn {
+  font-weight: bold;
+  border: 2px solid #ff4d4d;
+}
+.chat-file-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 8px;
+  background: rgba(45,45,45,0.03);
+  border: 2px dashed var(--border-color);
+}
+.chat-file-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: var(--bg-card);
+  border: 2px solid var(--border-color);
+  box-shadow: var(--shadow-hard-sm);
+  font-family: var(--font-hand);
+  font-size: 12px;
+  max-width: 200px;
+}
+.chat-file-thumb {
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+.chat-file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+/* ===== 消息气泡中的文件显示 ===== */
+.msg-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.msg-file {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: rgba(45,45,45,0.05);
+  border: 2px solid var(--border-color);
+  font-family: var(--font-hand);
+  font-size: 12px;
+}
+.message.user .msg-file {
+  background: rgba(255,255,255,0.2);
+  border-color: rgba(255,255,255,0.4);
+}
+.msg-file-img {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border: 1px solid var(--border-color);
+}
+.msg-file-name {
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>
 

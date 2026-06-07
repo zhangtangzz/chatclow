@@ -5,6 +5,7 @@ import com.chatclow.common.ChatRole;
 import com.chatclow.context.ChatContext;
 import com.chatclow.entity.AgentConversationRecord;
 import com.chatclow.entity.AiFunction;
+import com.chatclow.entity.UserDocument;
 import com.chatclow.service.AiFunctionService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -57,20 +58,25 @@ public class MessageBuildStep implements ChatChainStep {
         }
 
         // ② 构建消息列表
+        String provider = ctx.getModel().getProvider();
         ctx.setRequestMessages(buildMessages(
                 ctx.getAgent().getSystemPrompt(),
                 ctx.getHistory(),
                 ctx.getMessage(),
-                ctx.getRagContext()));
+                ctx.getRagContext(),
+                ctx.getChatFiles(),
+                provider));
     }
 
     /**
-     * system prompt（+ RAG 上下文）+ 历史消息 + 当前用户消息
+     * system prompt（+ RAG 上下文）+ 历史消息 + 当前用户消息（含文件）
      */
-    private List<Map<String, String>> buildMessages(String systemPrompt,
+    private List<Map<String, Object>> buildMessages(String systemPrompt,
                                                     List<AgentConversationRecord> history,
-                                                    String userMessage, String ragContext) {
-        List<Map<String, String>> messages = new ArrayList<>();
+                                                    String userMessage, String ragContext,
+                                                    List<UserDocument> chatFiles,
+                                                    String provider) {
+        List<Map<String, Object>> messages = new ArrayList<>();
 
         String finalPrompt = systemPrompt;
         if (ragContext != null && !ragContext.isEmpty()) {
@@ -80,12 +86,88 @@ public class MessageBuildStep implements ChatChainStep {
         }
         messages.add(Map.of("role", ChatRole.SYSTEM, "content", finalPrompt));
 
-        for (AgentConversationRecord record : history) {
-            messages.add(Map.of("role", record.getRole(), "content", record.getContent()));
+        // DeepSeek 要求 image_data 必须在 messages 首位，有图片时合并且跳过历史
+        boolean mergeForDeepSeekImage = "DeepSeek".equalsIgnoreCase(provider)
+                && chatFiles != null && !chatFiles.isEmpty()
+                && hasImageFile(chatFiles);
+
+        if (mergeForDeepSeekImage) {
+            // 有图片时合并历史到当前文本，满足 DeepSeek image_data 首位要求
+            StringBuilder merged = new StringBuilder();
+            for (AgentConversationRecord record : history) {
+                merged.append("【").append(record.getRole()).append("】\n")
+                      .append(record.getContent()).append("\n\n");
+            }
+            if (merged.length() > 0) {
+                merged.append("---\n\n");
+            }
+            merged.append(userMessage != null ? userMessage : "");
+            messages.add(buildFileMessage(merged.toString(), chatFiles, provider));
+        } else {
+            for (AgentConversationRecord record : history) {
+                messages.add(Map.of("role", record.getRole(), "content", record.getContent()));
+            }
+            if (chatFiles != null && !chatFiles.isEmpty()) {
+                messages.add(buildFileMessage(userMessage, chatFiles, provider));
+            } else {
+                messages.add(Map.of("role", ChatRole.USER, "content", userMessage));
+            }
         }
 
-        messages.add(Map.of("role", ChatRole.USER, "content", userMessage));
         return messages;
+    }
+
+    private boolean hasImageFile(List<UserDocument> files) {
+        for (UserDocument f : files) {
+            String ft = f.getFileType() != null ? f.getFileType().toLowerCase() : "";
+            if (isImageType(ft)) return true;
+        }
+        return false;
+    }
+
+    /**
+     * 构建包含文件内容的用户消息
+     * 当前 API 均不支持多模态（DeepSeek/MiMo），仅传文本
+     */
+    private Map<String, Object> buildFileMessage(String userMessage, List<UserDocument> files,
+                                                  String provider) {
+        StringBuilder text = new StringBuilder(
+                userMessage != null && !userMessage.isEmpty() ? userMessage : "");
+
+        for (UserDocument file : files) {
+            String fileType = file.getFileType() != null ? file.getFileType().toLowerCase() : "";
+            if ("txt".equals(fileType) || "md".equals(fileType)) {
+                String content = file.getContent();
+                if (content != null && !content.isEmpty()) {
+                    text.append("\n\n【文件: ").append(file.getFileName()).append("】\n").append(content);
+                }
+            } else if (isImageType(fileType)) {
+                text.append("\n[用户上传了图片: ").append(file.getFileName()).append("]");
+            } else {
+                text.append("\n[用户上传了文件: ").append(file.getFileName()).append("]");
+            }
+        }
+
+        Map<String, Object> message = new HashMap<>();
+        message.put("role", ChatRole.USER);
+        message.put("content", text.toString());
+        return message;
+    }
+
+    private boolean isImageType(String fileType) {
+        return "png".equals(fileType) || "jpg".equals(fileType) || "jpeg".equals(fileType)
+                || "gif".equals(fileType) || "webp".equals(fileType) || "bmp".equals(fileType);
+    }
+
+    private String mimeType(String fileType) {
+        switch (fileType) {
+            case "png": return "image/png";
+            case "jpg": case "jpeg": return "image/jpeg";
+            case "gif": return "image/gif";
+            case "webp": return "image/webp";
+            case "bmp": return "image/bmp";
+            default: return "image/png";
+        }
     }
 
     /**

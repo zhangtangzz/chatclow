@@ -38,9 +38,6 @@ public class User {
     //角色：1=普通用户，2=管理员
     private Integer role;
 
-    //使用额度
-    private Integer totals;
-
     //创建时间
     @TableField(fill = FieldFill.INSERT)
     private  LocalDateTime createdDt;

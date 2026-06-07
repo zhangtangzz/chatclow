@@ -4,6 +4,7 @@ import com.chatclow.common.ChatRole;
 import com.chatclow.context.ChatContext;
 import com.chatclow.entity.AgentConversationRecord;
 import com.chatclow.entity.AiFunction;
+import com.chatclow.entity.AiModel;
 import com.chatclow.service.AiFunctionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -38,6 +39,9 @@ class MessageBuildStepTest {
         ctx.getAgent().setSystemPrompt("你是一个AI助手");
         ctx.setMessage("今天的天气怎么样？");
         ctx.setHistory(List.of());
+        AiModel model = new AiModel();
+        model.setProvider("DeepSeek");
+        ctx.setModel(model);
     }
 
     @Test
@@ -53,10 +57,10 @@ class MessageBuildStepTest {
 
         step.process(ctx);
 
-        List<Map<String, String>> msgs = ctx.getRequestMessages();
+        List<Map<String, Object>> msgs = ctx.getRequestMessages();
         assertEquals(2, msgs.size());
         assertEquals(ChatRole.SYSTEM, msgs.get(0).get("role"));
-        assertTrue(msgs.get(0).get("content").contains("你是一个AI助手"));
+        assertTrue(((String) msgs.get(0).get("content")).contains("你是一个AI助手"));
         assertEquals(ChatRole.USER, msgs.get(1).get("role"));
         assertEquals("今天的天气怎么样？", msgs.get(1).get("content"));
         assertFalse(ctx.isFunctionsEnabled());
@@ -70,7 +74,7 @@ class MessageBuildStepTest {
 
         step.process(ctx);
 
-        String systemContent = ctx.getRequestMessages().get(0).get("content");
+        String systemContent = (String) ctx.getRequestMessages().get(0).get("content");
         assertTrue(systemContent.contains("【参考知识库内容】"));
         assertTrue(systemContent.contains("知识库内容：北京今天25度"));
     }
@@ -82,7 +86,7 @@ class MessageBuildStepTest {
 
         step.process(ctx);
 
-        String systemContent = ctx.getRequestMessages().get(0).get("content");
+        String systemContent = (String) ctx.getRequestMessages().get(0).get("content");
         assertFalse(systemContent.contains("【参考知识库内容】"));
     }
 
@@ -98,7 +102,7 @@ class MessageBuildStepTest {
 
         step.process(ctx);
 
-        List<Map<String, String>> msgs = ctx.getRequestMessages();
+        List<Map<String, Object>> msgs = ctx.getRequestMessages();
         assertEquals(4, msgs.size()); // system + 2 history + user
         assertEquals(ChatRole.SYSTEM, msgs.get(0).get("role"));
         assertEquals("user", msgs.get(1).get("role"));

@@ -6,8 +6,11 @@ import com.chatclow.entity.AiAgent;
 import com.chatclow.entity.RagChunk;
 import com.chatclow.service.EmbeddingService;
 import com.chatclow.service.RerankService;
+import com.chatclow.service.UserDocumentService;
 import com.chatclow.storage.vector.ChatClowVectorStore;
 import com.chatclow.storage.vector.VectorStoreFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -44,9 +47,13 @@ import java.util.stream.Collectors;
 @Order(20)
 public class RagStep implements ChatChainStep {
 
+    private static final Logger log = LoggerFactory.getLogger(RagStep.class);
+
     @Autowired private EmbeddingService embeddingService;
     @Autowired private VectorStoreFactory vectorStoreFactory;
     @Autowired private RerankService rerankService;
+    @Autowired private UserDocumentService userDocumentService;
+    @Autowired private com.chatclow.mapper.RagKnowledgeBaseMapper ragKnowledgeBaseMapper;
 
     @Override
     public void process(ChatContext ctx) {
@@ -63,7 +70,14 @@ public class RagStep implements ChatChainStep {
 
         String query = ctx.getMessage();
         Long kbId = agent.getKbId();
-        ChatClowVectorStore vectorStore = vectorStoreFactory.getVectorStore(kbId);
+
+        // 未绑定特定知识库时搜全部，取默认 vectorStore
+        ChatClowVectorStore vectorStore;
+        if (kbId != null) {
+            vectorStore = vectorStoreFactory.getVectorStore(kbId);
+        } else {
+            vectorStore = vectorStoreFactory.getDefaultVectorStore();
+        }
 
         // ①② 并行：向量化 + 关键字检索
         CompletableFuture<float[]> embedFuture =
@@ -105,6 +119,25 @@ public class RagStep implements ChatChainStep {
         }
 
         ctx.setRagContext(ragContext);
+
+        // ⑤ 用户个人 RAG（userId 隔离，始终检索）
+        Long userId = ctx.getUserId();
+        if (userId != null) {
+            try {
+                List<String> userDocResults = userDocumentService.search(userId, query, 3);
+                if (!userDocResults.isEmpty()) {
+                    String userRagText = String.join("\n\n", userDocResults);
+                    String existing = ctx.getRagContext();
+                    if (existing != null && !existing.isEmpty()) {
+                        ctx.setRagContext(existing + "\n\n【用户个人文档】\n" + userRagText);
+                    } else {
+                        ctx.setRagContext("【用户个人文档】\n" + userRagText);
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("[RAG] 用户个人文档检索失败: {}", e.getMessage());
+            }
+        }
     }
 
     @Override
@@ -112,7 +145,6 @@ public class RagStep implements ChatChainStep {
         AiAgent agent = ctx.getAgent();
         return agent == null
                 || agent.getKbEnabled() == null
-                || agent.getKbEnabled() != 1
-                || agent.getKbId() == null;
+                || agent.getKbEnabled() != 1;
     }
 }

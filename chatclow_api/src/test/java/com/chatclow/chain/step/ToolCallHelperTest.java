@@ -28,13 +28,13 @@ class ToolCallHelperTest {
     @InjectMocks
     private ToolCallHelper helper;
 
-    private List<Map<String, String>> originalMessages;
+    private List<Map<String, Object>> originalMessages;
 
     @BeforeEach
     void setUp() {
         originalMessages = List.of(
-                Map.of("role", ChatRole.SYSTEM, "content", "你是一个助手"),
-                Map.of("role", ChatRole.USER, "content", "北京天气怎么样")
+                Map.<String, Object>of("role", ChatRole.SYSTEM, "content", "你是一个助手"),
+                Map.<String, Object>of("role", ChatRole.USER, "content", "北京天气怎么样")
         );
     }
 

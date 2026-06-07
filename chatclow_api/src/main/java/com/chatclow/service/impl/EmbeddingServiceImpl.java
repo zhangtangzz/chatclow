@@ -3,6 +3,8 @@ package com.chatclow.service.impl;
 import com.chatclow.service.EmbeddingService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
@@ -22,6 +24,8 @@ import java.util.stream.IntStream;
  */
 @Service
 public class EmbeddingServiceImpl implements EmbeddingService {
+
+    private static final Logger log = LoggerFactory.getLogger(EmbeddingServiceImpl.class);
 
     @Value("${rag.embedding.api-url}")
     private String apiUrl;
@@ -79,7 +83,7 @@ public class EmbeddingServiceImpl implements EmbeddingService {
                 .flatMap(List::stream)
                 .collect(Collectors.toList());
 
-        System.out.println("[Embedding] 全部向量化成功！共 " + allEmbeddings.size()
+        log.info("[Embedding] 全部向量化成功！共 " + allEmbeddings.size()
                 + " 条向量，维度: " + (allEmbeddings.isEmpty() ? 0 : allEmbeddings.get(0).length));
         return allEmbeddings;
     }
@@ -90,7 +94,7 @@ public class EmbeddingServiceImpl implements EmbeddingService {
      */
     private List<float[]> callEmbeddingApi(List<String> batch, int batchNum, int totalBatches) {
         try {
-            System.out.println("[Embedding] 批次 " + batchNum + "/" + totalBatches
+            log.info("[Embedding] 批次 " + batchNum + "/" + totalBatches
                     + "：开始处理 " + batch.size() + " 条（并行模式）");
 
             HttpHeaders headers = new HttpHeaders();
@@ -120,7 +124,7 @@ public class EmbeddingServiceImpl implements EmbeddingService {
                 embeddings.add(vector);
             }
 
-            System.out.println("[Embedding] 批次 " + batchNum + "/" + totalBatches
+            log.info("[Embedding] 批次 " + batchNum + "/" + totalBatches
                     + "：完成，返回 " + embeddings.size() + " 条向量");
             return embeddings;
 

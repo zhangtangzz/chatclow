@@ -6,10 +6,11 @@ import com.mongodb.client.*;
 import com.mongodb.client.model.Filters;
 import org.bson.Document;
 import org.bson.conversions.Bson;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 import java.util.*;
 
@@ -21,6 +22,7 @@ import java.util.*;
 @ConditionalOnProperty(name = "mongodb.enabled", havingValue = "true")
 public class MongoDBVectorStore implements ChatClowVectorStore {
 
+    private static final Logger log = LoggerFactory.getLogger(MongoDBVectorStore.class);
     private static final String COLLECTION_NAME = "rag_vectors";
 
     @Autowired
@@ -38,7 +40,7 @@ public class MongoDBVectorStore implements ChatClowVectorStore {
                 .append("vector", parseVectorString(chunk.getVectorData()));
 
         collection.insertOne(doc);
-        System.out.println("[MongoDBVectorStore] 插入向量 ID=" + chunk.getId());
+        log.info("[MongoDBVectorStore] 插入向量 ID=" + chunk.getId());
         return true;
     }
 
@@ -57,7 +59,7 @@ public class MongoDBVectorStore implements ChatClowVectorStore {
         }
 
         collection.insertMany(docs);
-        System.out.println("[MongoDBVectorStore] 批量插入 " + chunks.size() + " 条");
+        log.info("[MongoDBVectorStore] 批量插入 " + chunks.size() + " 条");
         return true;
     }
 
@@ -99,7 +101,7 @@ public class MongoDBVectorStore implements ChatClowVectorStore {
             results.add(chunk);
         }
 
-        System.out.println("[MongoDBVectorStore] 检索完成，返回 " + results.size() + " 条");
+        log.info("[MongoDBVectorStore] 检索完成，返回 " + results.size() + " 条");
         return results;
     }
 
@@ -107,7 +109,7 @@ public class MongoDBVectorStore implements ChatClowVectorStore {
     public boolean deleteByDocument(Long documentId) {
         MongoCollection<Document> collection = mongoDatabase.getCollection(COLLECTION_NAME);
         collection.deleteMany(Filters.eq("doc_id", documentId));
-        System.out.println("[MongoDBVectorStore] 删除文档 ID=" + documentId);
+        log.info("[MongoDBVectorStore] 删除文档 ID=" + documentId);
         return true;
     }
 
@@ -117,7 +119,7 @@ public class MongoDBVectorStore implements ChatClowVectorStore {
             mongoDatabase.listCollectionNames().first();
             return true;
         } catch (Exception e) {
-            System.err.println("[MongoDBVectorStore] 连接失败: " + e.getMessage());
+            log.warn("[MongoDBVectorStore] 连接失败: {}", e.getMessage());
             return false;
         }
     }

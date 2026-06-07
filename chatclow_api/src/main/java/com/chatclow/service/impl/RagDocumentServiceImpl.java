@@ -5,6 +5,7 @@ import com.chatclow.entity.RagChunk;
 import com.chatclow.entity.RagDocument;
 import com.chatclow.mapper.RagDocumentMapper;
 import com.chatclow.service.EmbeddingService;
+import com.chatclow.service.RagChunkService;
 import com.chatclow.service.RagDocumentService;
 import com.chatclow.storage.vector.ChatClowVectorStore;
 import com.chatclow.storage.vector.VectorStoreFactory;
@@ -13,7 +14,10 @@ import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.poi.xwpf.extractor.XWPFWordExtractor;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import java.io.File;
@@ -26,6 +30,7 @@ import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Executor;
 
 /**
  * 文档上传-处理-查重-保存
@@ -35,6 +40,8 @@ import java.util.List;
 @Service
 public class RagDocumentServiceImpl implements RagDocumentService {
 
+    private static final Logger log = LoggerFactory.getLogger(RagDocumentServiceImpl.class);
+
     @Autowired
     private RagDocumentMapper ragDocumentMapper;
 
@@ -43,6 +50,13 @@ public class RagDocumentServiceImpl implements RagDocumentService {
 
     @Autowired
     private VectorStoreFactory vectorStoreFactory;
+
+    @Autowired
+    private RagChunkService ragChunkService;
+
+    @Autowired
+    @Qualifier("sseExecutor")
+    private Executor sseExecutor;
 
     @Override
     public boolean add(RagDocument document) {
@@ -69,6 +83,22 @@ public class RagDocumentServiceImpl implements RagDocumentService {
 
     @Override
     public boolean deleteById(Long id) {
+        // 1. 查出文档，获取知识库ID
+        RagDocument doc = ragDocumentMapper.selectById(id);
+        if (doc == null) return false;
+
+        // 2. 清理 MySQL chatclow_rag_chunk 中的切片（MySQL 模式）
+        ragChunkService.deleteByDocumentId(id);
+
+        // 3. 清理向量存储中的向量（PG / MongoDB 模式）
+        try {
+            ChatClowVectorStore vectorStore = vectorStoreFactory.getVectorStore(doc.getKbId());
+            vectorStore.deleteByDocument(id);
+        } catch (Exception e) {
+            log.warn("[RAG-Delete] 清理向量存储失败: {}", e.getMessage());
+        }
+
+        // 4. 删除文档记录
         return ragDocumentMapper.deleteById(id) > 0;
     }
 
@@ -92,12 +122,12 @@ public class RagDocumentServiceImpl implements RagDocumentService {
         if (textChunks.isEmpty()) {
             throw new RuntimeException("切片结果为空");
         }
-        System.out.println("[RAG] 文档切成 " + textChunks.size() + " 个片段");
+        log.info("[RAG] 文档切成 " + textChunks.size() + " 个片段");
 
         // 3. ★ 通过 VectorStoreFactory 获取该知识库对应的向量存储后端
         Long kbId = document.getKbId();
         ChatClowVectorStore vectorStore = vectorStoreFactory.getVectorStore(kbId);
-        System.out.println("[RAG] 知识库 " + kbId + " 使用向量存储: " + vectorStore.getClass().getSimpleName());
+        log.info("[RAG] 知识库 " + kbId + " 使用向量存储: " + vectorStore.getClass().getSimpleName());
 
         // 4. ★ 去重过滤：通过 SPI 接口查询后端是否已有该内容
         List<String> uniqueChunks = new ArrayList<>();
@@ -110,20 +140,20 @@ public class RagDocumentServiceImpl implements RagDocumentService {
             // 通过 SPI 接口查询去重（MySQL 查 chatclow_rag_chunk，PG 查 rag_vectors）
             if (vectorStore.existsByHash(kbId, hash)) {
                 skippedCount++;
-                System.out.println("[RAG-Dedup] 跳过重复切片，hash=" + hash.substring(0, 8) + "...");
+                log.info("[RAG-Dedup] 跳过重复切片，hash=" + hash.substring(0, 8) + "...");
                 continue;
             }
 
             uniqueChunks.add(chunkContent);
             uniqueHashes.add(hash);
         }
-        System.out.println("[RAG-Dedup] 去重完成：跳过 " + skippedCount + " 个，剩余 " + uniqueChunks.size() + " 个待向量化");
+        log.info("[RAG-Dedup] 去重完成：跳过 " + skippedCount + " 个，剩余 " + uniqueChunks.size() + " 个待向量化");
 
         if (uniqueChunks.isEmpty()) {
             document.setChunkCount(0);
             document.setStatus(3);
             ragDocumentMapper.updateById(document);
-            System.out.println("[RAG-Dedup] 所有切片都是重复的，无需处理");
+            log.info("[RAG-Dedup] 所有切片都是重复的，无需处理");
             return;
         }
 
@@ -152,14 +182,14 @@ public class RagDocumentServiceImpl implements RagDocumentService {
         if (!storeResult) {
             throw new RuntimeException("向量写入失败，后端: " + vectorStore.getClass().getSimpleName());
         }
-        System.out.println("[RAG] 向量已写入 " + vectorStore.getClass().getSimpleName() + "，共 " + chunks.size() + " 条");
+        log.info("[RAG] 向量已写入 " + vectorStore.getClass().getSimpleName() + "，共 " + chunks.size() + " 条");
 
         // 8. 更新文档的切片数量和状态
         document.setChunkCount(chunks.size());
         document.setStatus(3);  // 处理完成
         ragDocumentMapper.updateById(document);
 
-        System.out.println("[RAG] 文档处理完成！去重后入库 " + chunks.size() + " 条切片（跳过重复 " + skippedCount + " 条）");
+        log.info("[RAG] 文档处理完成！去重后入库 " + chunks.size() + " 条切片（跳过重复 " + skippedCount + " 条）");
     }
 
     /**
@@ -202,7 +232,7 @@ public class RagDocumentServiceImpl implements RagDocumentService {
 
             // 4. 立即返回 documentId，后台异步处理
             Long documentId = document.getId();
-            new Thread(() -> asyncProcessDocument(documentId)).start();
+            sseExecutor.execute(() -> asyncProcessDocument(documentId));
 
             return documentId;
 
@@ -234,7 +264,7 @@ public class RagDocumentServiceImpl implements RagDocumentService {
                 doc.setErrorMsg(e.getMessage());
                 ragDocumentMapper.updateById(doc);
             }
-            System.err.println("[RAG-Upload] 处理失败: " + e.getMessage());
+            log.warn("[RAG-Upload] 处理失败: {}", e.getMessage());
         }
     }
 
@@ -263,9 +293,9 @@ public class RagDocumentServiceImpl implements RagDocumentService {
         String text = new String(bytes, StandardCharsets.UTF_8);
         if (containsGarbled(text)) {
             text = new String(bytes, java.nio.charset.Charset.forName("GBK"));
-            System.out.println("[RAG-Upload] 文件使用 GBK 编码读取: " + fileName);
+            log.info("[RAG-Upload] 文件使用 GBK 编码读取: " + fileName);
         } else {
-            System.out.println("[RAG-Upload] 文件使用 UTF-8 编码读取: " + fileName);
+            log.info("[RAG-Upload] 文件使用 UTF-8 编码读取: " + fileName);
         }
         return text;
     }
@@ -284,7 +314,7 @@ public class RagDocumentServiceImpl implements RagDocumentService {
             if (text == null || text.trim().isEmpty()) {
                 throw new RuntimeException("PDF 文件无可提取的文字（可能为扫描件）: " + fileName);
             }
-            System.out.println("[RAG-Upload] PDF 解析成功: " + fileName
+            log.info("[RAG-Upload] PDF 解析成功: " + fileName
                     + ", 页数=" + document.getNumberOfPages()
                     + ", 字数=" + text.length());
             return text;
@@ -302,7 +332,7 @@ public class RagDocumentServiceImpl implements RagDocumentService {
             if (text == null || text.trim().isEmpty()) {
                 throw new RuntimeException("Word 文件内容为空: " + fileName);
             }
-            System.out.println("[RAG-Upload] Word 解析成功: " + fileName
+            log.info("[RAG-Upload] Word 解析成功: " + fileName
                     + ", 字数=" + text.length());
             return text;
         }

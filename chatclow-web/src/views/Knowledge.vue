@@ -3,9 +3,6 @@
     <!-- 顶部导航栏 -->
     <div class="kb-header">
       <div class="header-left">
-        <el-button class="back-btn" :icon="ArrowLeft" @click="$router.push('/')">
-          返回聊天
-        </el-button>
         <h2 class="page-title">知识库管理</h2>
       </div>
       <div class="header-right">
@@ -281,7 +278,6 @@ import {
 } from '../api/knowledge'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  ArrowLeft,
   Plus,
   MoreFilled,
   Document,

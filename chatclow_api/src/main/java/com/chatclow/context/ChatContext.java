@@ -33,6 +33,7 @@ public class ChatContext {
     private Long conversationId;
     private boolean streamMode;
     private boolean memoryEnabled = true;
+    private java.util.List<Long> fileIds;
 
     // ──── 核心对象（ContextAssemblyStep 从数据库加载）────
 
@@ -56,7 +57,10 @@ public class ChatContext {
     // ──── 请求消息（MessageBuildStep 构建）────
 
     /** 原始消息列表，Function Calling 二次请求时基于此重建 */
-    private List<Map<String, String>> requestMessages;
+    private List<Map<String, Object>> requestMessages;
+
+    /** 对话上传的文件（source=chat） */
+    private List<UserDocument> chatFiles;
 
     // ──── 工具调用检测（ModelCallStep 从 SSE 流中解析）────
 
@@ -115,6 +119,8 @@ public class ChatContext {
     public void setStreamMode(boolean streamMode) { this.streamMode = streamMode; }
     public boolean isMemoryEnabled() { return memoryEnabled; }
     public void setMemoryEnabled(boolean memoryEnabled) { this.memoryEnabled = memoryEnabled; }
+    public java.util.List<Long> getFileIds() { return fileIds; }
+    public void setFileIds(java.util.List<Long> fileIds) { this.fileIds = fileIds; }
     public AiAgent getAgent() { return agent; }
     public void setAgent(AiAgent agent) { this.agent = agent; }
     public AiModel getModel() { return model; }
@@ -139,8 +145,10 @@ public class ChatContext {
     public void setToolCalls(List<ToolCallInfo> toolCalls) { this.toolCalls = toolCalls; }
     public String getReasoningContent() { return reasoningContent; }
     public void setReasoningContent(String reasoningContent) { this.reasoningContent = reasoningContent; }
-    public List<Map<String, String>> getRequestMessages() { return requestMessages; }
-    public void setRequestMessages(List<Map<String, String>> requestMessages) { this.requestMessages = requestMessages; }
+    public List<Map<String, Object>> getRequestMessages() { return requestMessages; }
+    public void setRequestMessages(List<Map<String, Object>> requestMessages) { this.requestMessages = requestMessages; }
+    public List<UserDocument> getChatFiles() { return chatFiles; }
+    public void setChatFiles(List<UserDocument> chatFiles) { this.chatFiles = chatFiles; }
     public SseEmitter getEmitter() { return emitter; }
     public void setEmitter(SseEmitter emitter) { this.emitter = emitter; }
     public StringBuilder getFullReply() { return fullReply; }

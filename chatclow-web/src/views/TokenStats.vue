@@ -2,12 +2,7 @@
   <div class="token-stats-layout">
     <div class="token-stats-container">
       <div class="stats-header">
-        <div class="header-left">
-          <el-button text @click="$router.push('/')">
-            <el-icon><ArrowLeft /></el-icon>
-          </el-button>
-          <h2>用量统计</h2>
-        </div>
+        <h2>用量统计</h2>
       </div>
 
       <div class="stats-summary">
@@ -48,7 +43,6 @@ import { ref, computed, onMounted } from 'vue'
 import { useUserStore } from '../stores/user'
 import { getUserTokenStats } from '../api/token'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft } from '@element-plus/icons-vue'
 
 const userStore = useUserStore()
 const statsList = ref([])

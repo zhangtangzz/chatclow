@@ -38,7 +38,7 @@ class ChatServiceImplTest {
             return null;
         }).when(chatChain).execute(any(ChatContext.class));
 
-        ChatResponse resp = chatService.chat(1L, 100L, "你好", null, true);
+        ChatResponse resp = chatService.chat(1L, 100L, "你好", null, true, null);
 
         assertNotNull(resp);
         assertEquals("AI 回复", resp.getReply());
@@ -55,7 +55,7 @@ class ChatServiceImplTest {
         }).when(chatChain).execute(any(ChatContext.class));
 
         SseEmitter emitter = new SseEmitter();
-        chatService.chatStream(1L, 100L, "你好", 5L, false, emitter);
+        chatService.chatStream(1L, 100L, "你好", 5L, false, null, emitter);
 
         verify(chatChain).execute(argThat(ctx ->
                 ctx.isStreamMode() && !ctx.isMemoryEnabled()));

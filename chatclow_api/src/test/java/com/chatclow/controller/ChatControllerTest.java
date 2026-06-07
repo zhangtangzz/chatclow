@@ -33,7 +33,7 @@ class ChatControllerTest {
     @Test
     @DisplayName("POST /api/chat/send 返回正确的 ChatResponse 结构")
     void shouldReturnChatResponse() throws Exception {
-        when(chatService.chat(anyLong(), anyLong(), anyString(), any(), anyBoolean()))
+        when(chatService.chat(anyLong(), anyLong(), anyString(), any(), anyBoolean(), any()))
                 .thenReturn(new ChatResponse("AI 回复内容", 10L));
 
         mockMvc.perform(post("/api/chat/send")

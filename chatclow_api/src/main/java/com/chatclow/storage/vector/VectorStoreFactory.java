@@ -4,6 +4,8 @@ import com.chatclow.entity.RagKnowledgeBase;
 import com.chatclow.entity.StoreInstance;
 import com.chatclow.mapper.RagKnowledgeBaseMapper;
 import com.chatclow.mapper.StoreInstanceMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
@@ -20,6 +22,8 @@ import java.util.Map;
  */
 @Component
 public class VectorStoreFactory {
+
+    private static final Logger log = LoggerFactory.getLogger(VectorStoreFactory.class);
 
     @Autowired
     private ApplicationContext applicationContext;
@@ -60,11 +64,11 @@ public class VectorStoreFactory {
             } else if (store instanceof com.chatclow.storage.vector.pgvector.PgVectorStore) {
                 registry.put("PGVECTOR", store);
             } else {
-                System.out.println("[VectorStoreFactory] 警告：未识别的向量存储实现: " + store.getClass().getSimpleName());
+                log.info("[VectorStoreFactory] 警告：未识别的向量存储实现: " + store.getClass().getSimpleName());
             }
         }
 
-        System.out.println("[VectorStoreFactory] 已注册向量存储实现: " + registry.keySet());
+        log.info("[VectorStoreFactory] 已注册向量存储实现: " + registry.keySet());
     }
 
 
@@ -84,7 +88,7 @@ public class VectorStoreFactory {
         Long storeInstanceId = kb.getStoreInstanceId();
         if (storeInstanceId == null) {
             // 兜底：如果没有配置，返回默认的 MySQL 实现
-            System.out.println("[VectorStoreFactory] 知识库 " + kbId + " 未配置存储实例，使用默认 MySQL");
+            log.info("[VectorStoreFactory] 知识库 " + kbId + " 未配置存储实例，使用默认 MySQL");
             return registry.get("MYSQL");
         }
 
@@ -122,13 +126,35 @@ public class VectorStoreFactory {
     }
 
     /**
+     * 获取默认向量存储实例（不依赖 kbId，搜全部时使用）
+     * 优先取第一个启用的知识库的存储后端，兜底 MySQL
+     */
+    public ChatClowVectorStore getDefaultVectorStore() {
+        // 优先取第一个启用的知识库的存储类型
+        List<RagKnowledgeBase> kbs = ragKnowledgeBaseMapper.selectList(null);
+        for (RagKnowledgeBase kb : kbs) {
+            if (kb.getStoreInstanceId() != null) {
+                try {
+                    return getVectorStoreByInstanceId(kb.getStoreInstanceId());
+                } catch (Exception ignored) {
+                    // 该实例不可用，尝试下一个
+                }
+            }
+        }
+        // 兜底：使用 MySQL 实现
+        ChatClowVectorStore mysql = registry.get("MYSQL");
+        if (mysql != null) return mysql;
+        throw new RuntimeException("没有可用的向量存储实例");
+    }
+
+    /**
      * 注册新的向量存储实现（支持运行时动态注册）
      * @param type  存储类型（MYSQL / REDIS / MILVUS）
      * @param store 实现实例
      */
     public void register(String type, ChatClowVectorStore store) {
         registry.put(type, store);
-        System.out.println("[VectorStoreFactory] 动态注册向量存储: " + type);
+        log.info("[VectorStoreFactory] 动态注册向量存储: " + type);
     }
 
     /**
@@ -141,7 +167,7 @@ public class VectorStoreFactory {
             ChatClowVectorStore store = getVectorStoreByInstanceId(storeInstanceId);
             return store.test();
         } catch (Exception e) {
-            System.err.println("[VectorStoreFactory] 测试失败: " + e.getMessage());
+            log.warn("[VectorStoreFactory] 测试失败: {}", e.getMessage());
             return false;
         }
     }

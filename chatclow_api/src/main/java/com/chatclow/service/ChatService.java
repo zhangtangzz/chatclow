@@ -19,10 +19,11 @@ public interface ChatService {
      * @param userId          用户ID（必须）
      * @param message         用户消息内容（必须）
      * @param conversationId  会话ID（可选，传null则新建会话）
+     * @param fileIds         对话上传的文件ID列表（可选）
      * @return AI回复内容
      */
     ChatResponse chat(Long agentId, Long userId, String message,
-                     Long conversationId, boolean memoryEnabled);
+                     Long conversationId, boolean memoryEnabled, java.util.List<Long> fileIds);
 
 
     /**
@@ -32,9 +33,10 @@ public interface ChatService {
      * @param userId          用户ID
      * @param message         用户消息
      * @param conversationId  会话ID（可选）
+     * @param fileIds         对话上传的文件ID列表（可选）
      * @param emitter         SSE 发射器，用于逐块推送数据
      */
     void chatStream(Long agentId, Long userId, String message,
-                    Long conversationId, boolean memoryEnabled, SseEmitter emitter);
+                    Long conversationId, boolean memoryEnabled, java.util.List<Long> fileIds, SseEmitter emitter);
 
 }

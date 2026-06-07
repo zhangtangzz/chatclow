@@ -43,7 +43,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper,User> implements Use
         user.setPassword(new BCryptPasswordEncoder().encode(password));
         user.setEmail(email);
         user.setRole(1);
-        user.setTotals(100);
 
         //保存到数据库
         return this.save(user);

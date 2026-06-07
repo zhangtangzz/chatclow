@@ -12,6 +12,7 @@ public class ChatRequest {
     private String message; //用户消息内容
     private Long conversationId; // 会话ID
     private boolean memoryEnabled = true; // 是否启用记忆（默认开启）
+    private java.util.List<Long> fileIds; // 对话上传的文件ID列表
 
     public Long getAgentId() { return agentId; }
     public void setAgentId(Long agentId) { this.agentId = agentId; }
@@ -27,5 +28,8 @@ public class ChatRequest {
 
     public boolean isMemoryEnabled() { return memoryEnabled; }
     public void setMemoryEnabled(boolean memoryEnabled) { this.memoryEnabled = memoryEnabled; }
+
+    public java.util.List<Long> getFileIds() { return fileIds; }
+    public void setFileIds(java.util.List<Long> fileIds) { this.fileIds = fileIds; }
 
 }

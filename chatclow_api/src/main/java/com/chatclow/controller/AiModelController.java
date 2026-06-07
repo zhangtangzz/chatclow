@@ -96,6 +96,19 @@ public class AiModelController {
     }
 
     /**
+     * 测试模型连接
+     * POST /api/model/test
+     */
+    @PostMapping("/test")
+    public R<Void> testConnection(@RequestBody AiModel model) {
+        boolean ok = aiModelService.testConnection(model);
+        if (ok) {
+            return R.ok("连接成功！", null);
+        }
+        return R.error("连接失败，请检查 API 地址和密钥");
+    }
+
+    /**
      * 切换启用/禁用状态
      * PUT /api/model/status/{id}
      */

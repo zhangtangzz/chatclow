@@ -40,4 +40,9 @@ public interface AiModelService {
      * 传回切换后的状态值
      */
     Integer toggleStatus(Long id);
+
+    /**
+     * 测试模型连接：发送一个简单的请求验证API是否可用
+     */
+    boolean testConnection(AiModel model);
 }

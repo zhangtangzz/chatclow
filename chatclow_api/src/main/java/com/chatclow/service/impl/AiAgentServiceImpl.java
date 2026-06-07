@@ -2,12 +2,17 @@ package com.chatclow.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.chatclow.entity.AiAgent;
+import com.chatclow.entity.AiFunction;
+import com.chatclow.entity.AgentConversation;
 import com.chatclow.entity.User;
 import com.chatclow.mapper.AiAgentMapper;
+import com.chatclow.mapper.AiFunctionMapper;
 import com.chatclow.mapper.UserMapper;
+import com.chatclow.service.AgentConversationService;
 import com.chatclow.service.AiAgentService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -20,6 +25,12 @@ public class AiAgentServiceImpl implements AiAgentService {
 
     @Autowired
     private UserMapper userMapper;
+
+    @Autowired
+    private AgentConversationService agentConversationService;
+
+    @Autowired
+    private AiFunctionMapper aiFunctionMapper;
 
     @Override
     public boolean add(AiAgent aiAgent) {
@@ -78,7 +89,22 @@ public class AiAgentServiceImpl implements AiAgentService {
     }
 
     @Override
+    @Transactional
     public boolean deleteById(Long id) {
+        // 1. 删除关联的会话（会级联删除聊天记录）
+        List<AgentConversation> conversations = agentConversationService.lambdaQuery()
+                .eq(AgentConversation::getAgentId, id)
+                .list();
+        for (AgentConversation conv : conversations) {
+            agentConversationService.deleteConversation(conv.getId());
+        }
+
+        // 2. 删除智能体自定义的工具（保留全局工具 agentId=-1）
+        LambdaQueryWrapper<AiFunction> functionWrapper = new LambdaQueryWrapper<AiFunction>()
+                .eq(AiFunction::getAgentId, id);
+        aiFunctionMapper.delete(functionWrapper);
+
+        // 3. 删除智能体
         return aiAgentMapper.deleteById(id) > 0;
     }
 

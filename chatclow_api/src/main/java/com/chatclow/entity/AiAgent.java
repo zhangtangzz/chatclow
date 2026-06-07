@@ -30,7 +30,6 @@ public class AiAgent {
     @NotNull(message = "绑定的模型ID不能为空")
     private Long modelId;
 
-    @NotNull(message = "创建者用户ID不能为空")
     private Long userId;
 
     // 状态：0=禁用，1=启用

@@ -56,7 +56,7 @@ public class SyncAiCallStep implements ChatChainStep {
         ctx.setStartTime(System.currentTimeMillis());
         try {
             AiModel model = ctx.getModel();
-            List<Map<String, String>> messages = ctx.getRequestMessages();
+            List<Map<String, Object>> messages = ctx.getRequestMessages();
             List<Map<String, Object>> toolsJson = ctx.getToolsJson();
 
             Map<String, Object> requestBody = new HashMap<>();
@@ -87,7 +87,7 @@ public class SyncAiCallStep implements ChatChainStep {
      * @param originalMessages 原始消息列表（FC 二次请求需要基于此重建）
      */
     private String syncCallAi(ChatContext ctx, AiModel model, String jsonBody,
-                               List<Map<String, String>> originalMessages) throws Exception {
+                               List<Map<String, Object>> originalMessages) throws Exception {
         Request request = new Request.Builder()
                 .url(model.getApiUrl())
                 .post(RequestBody.create(jsonBody,
@@ -123,7 +123,7 @@ public class SyncAiCallStep implements ChatChainStep {
      * <p>ToolCallHelper 负责消息构建和工具执行，本方法只负责编排流程。</p>
      */
     private String handleToolCalls(ChatContext ctx, AiModel model,
-                                    List<Map<String, String>> originalMessages,
+                                    List<Map<String, Object>> originalMessages,
                                     JsonNode toolCallsNode, String reasoningContent,
                                     int firstTokens) throws Exception {
         // ① 从 OpenAI 格式转成内部 ToolCallInfo 列表

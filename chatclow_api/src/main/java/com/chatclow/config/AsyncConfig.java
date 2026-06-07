@@ -1,16 +1,27 @@
 package com.chatclow.config;
 
+import com.chatclow.util.AesUtil;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
+import javax.annotation.PostConstruct;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ThreadPoolExecutor;
 
 @Configuration
 @EnableAsync
 public class AsyncConfig {
+
+    @Value("${crypto.key}")
+    private String cryptoKey;
+
+    @PostConstruct
+    public void initAesKey() {
+        AesUtil.setSecretKey(cryptoKey);
+    }
 
     @Bean("sseExecutor")
     public Executor sseExecutor() {

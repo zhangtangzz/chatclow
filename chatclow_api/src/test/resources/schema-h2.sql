@@ -7,7 +7,6 @@ CREATE TABLE IF NOT EXISTS chatclow_ai_user (
     password VARCHAR(200) NOT NULL,
     email VARCHAR(100),
     role INT DEFAULT 1,
-    totals INT DEFAULT 100,
     created_dt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -49,6 +48,9 @@ CREATE TABLE IF NOT EXISTS chatclow_ai_conversation (
     user_id BIGINT NOT NULL,
     title VARCHAR(200),
     total_tokens INT DEFAULT 0,
+    model_id BIGINT,
+    model_name VARCHAR(100),
+    agent_id BIGINT,
     created_dt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -95,6 +97,43 @@ CREATE TABLE IF NOT EXISTS chatclow_rag_document (
     error_msg VARCHAR(500),
     chunk_count INT DEFAULT 0,
     content_hash VARCHAR(64),
+    created_dt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_dt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS chatclow_user_document (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    file_name VARCHAR(255),
+    file_type VARCHAR(50),
+    file_size BIGINT,
+    file_path VARCHAR(500),
+    content TEXT,
+    chunk_count INT DEFAULT 0,
+    status INT DEFAULT 1,
+    error_msg VARCHAR(500),
+    created_dt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS chatclow_user_chunk (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    doc_id BIGINT,
+    chunk_index INT,
+    content TEXT,
+    token_count INT,
+    vector_data TEXT,
+    content_hash VARCHAR(64),
+    source VARCHAR(20) DEFAULT 'rag',
+    conversation_id BIGINT,
+    created_dt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS chatclow_announcement (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(200) NOT NULL,
+    content TEXT,
+    status INT DEFAULT 1,
     created_dt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_dt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
