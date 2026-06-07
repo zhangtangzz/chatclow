@@ -125,6 +125,7 @@
       <tr><td>鉴权</td><td>JWT 0.9.1</td></tr>
       <tr><td>文档解析</td><td>PDFBox + Apache POI</td></tr>
       <tr><td>AI API</td><td>SiliconFlow Embedding / Rerank</td></tr>
+      <tr><td>加密</td><td>AES-128/ECB/PKCS5Padding (API密钥存储)</td></tr>
       <tr><td>JSON</td><td>Jackson (ObjectMapper)</td></tr>
     </table>
   </div>
@@ -237,7 +238,7 @@
   <tr><td>用户</td><td>GET</td><td>/api/user/{id}</td><td>获取用户</td></tr>
   <tr><td>登录</td><td>POST</td><td>/api/auth/login</td><td>登录返回JWT</td></tr>
   <tr><td>对话</td><td>POST</td><td>/api/chat/send</td><td>发送消息（非流式）</td></tr>
-  <tr><td>对话</td><td>POST</td><td>/api/chat/send-stream</td><td>SSE流式对话</td></tr>
+  <tr><td>对话</td><td>POST</td><td>/api/chat/send-stream</td><td>SSE流式对话（content/tool_call/tool_result/error/done）</td></tr>
   <tr><td>智能体</td><td>CRUD</td><td>/api/agent/**</td><td>智能体管理</td></tr>
   <tr><td>会话</td><td>CRUD</td><td>/api/conversation/**</td><td>对话历史</td></tr>
   <tr><td>知识库</td><td>CRUD</td><td>/api/knowledge-base/**</td><td>知识库管理</td></tr>
@@ -247,7 +248,7 @@
 </table>
 
 <!-- 重构改进 -->
-<h2>6. 本次重构优化内容</h2>
+<h2>6. 功能优化与改进记录</h2>
 <div class="grid">
   <div class="card">
     <h4>消除FC代码重复</h4>
@@ -266,8 +267,8 @@
     <p>删除未使用的 <code>messages</code> 字段和 <code>addMessage()</code> 方法，注释从冗长 HTML 格式简化为紧凑结构化注释。</p>
   </div>
   <div class="card">
-    <h4>日志统一</h4>
-    <p>全部 <code>e.printStackTrace()</code> 和 <code>System.err.println()</code> 替换为 SLF4J Logger，统一日志输出。</p>
+    <h4>日志统一 + 线程池</h4>
+    <p>全部 <code>e.printStackTrace()</code> 和 <code>System.err.println()</code> 替换为 SLF4J Logger，涉及 9 个文件；所有 <code>new Thread()</code> 替换为 <code>sseExecutor</code> 线程池，统一管理异步任务并发。</p>
   </div>
   <div class="card">
     <h4>注释全面精简</h4>
@@ -280,6 +281,22 @@
   <div class="card">
     <h4>代码量变化</h4>
     <p>19个文件变更 <strong>-1644 行 / +578 行</strong>，净减少约 <strong>1000 行</strong>代码。</p>
+  </div>
+  <div class="card">
+    <h4>API 密钥 AES 加密存储</h4>
+    <p>新增 <code>AesUtil</code> 工具类，对 AI 模型的 API 密钥进行 AES-128/ECB/PKCS5Padding 加密。保存时加密入库、展示时掩码（前4字符+****）、使用时自动解密，端到端保护密钥安全。</p>
+  </div>
+  <div class="card">
+    <h4>SSE 错误通知 + 前端终止按钮</h4>
+    <p>对话异常时向前端发送 <code>error</code> SSE 事件（含错误信息），前端通过 <code>AbortController</code> 中断 fetch 请求。新增红色终止按钮，用户可随时手动停止卡死的 AI 回复。</p>
+  </div>
+  <div class="card">
+    <h4>SSE 断线重连机制</h4>
+    <p>连接异常断开后显示重试横幅，保留上次消息内容。用户点击"重新发送"即可一键重试，不需要重新输入，不丢失对话上下文。</p>
+  </div>
+  <div class="card">
+    <h4>级联删除修复</h4>
+    <p>删除知识库时级联清理文档、切片和向量存储数据；删除模型时同步清理引用关系；删除智能体时级联删除关联工具定义。避免数据库和向量存储产生脏数据。</p>
   </div>
 </div>
 
@@ -320,6 +337,14 @@ npm run dev
   <div class="card">
     <h4>Function Calling</h4>
     <p>AI 返回 tool_calls → 解析函数名+参数 → FunctionExecutor 执行 → 结果以 role=tool 消息回传 → 二次请求（不带 tools 避免死循环）。流式模式通过 SSE 事件通知前端工具调用状态。</p>
+  </div>
+  <div class="card">
+    <h4>AES 加密存储</h4>
+    <p>API 密钥通过 AES-128/ECB/PKCS5Padding 加密后存入数据库。前端展示时自动掩码（只显示前4位），后台使用时自动解密。旧明文密钥在首次编辑保存时自动转为加密存储。</p>
+  </div>
+  <div class="card">
+    <h4>SSE 错误处理体系</h4>
+    <p>异常时发送 error SSE 事件告知前端具体错误信息；前端 AbortController 终止请求 + 重试横幅一键重发 + ChatServiceImpl 兜底异常捕获，三层保障防止对话卡死无反馈。</p>
   </div>
 </div>
 
