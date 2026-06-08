@@ -25,7 +25,6 @@ public class ChatServiceImpl implements ChatService {
 
     @Autowired
     private ChatChain chatChain;
-
     @Override
     public ChatResponse chat(Long agentId, Long userId, String message,
                               Long conversationId, boolean memoryEnabled, java.util.List<Long> fileIds) {

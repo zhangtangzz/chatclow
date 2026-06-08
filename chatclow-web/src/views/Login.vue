@@ -1,5 +1,9 @@
 <template>
   <div class="login-page">
+    <!-- 水印：左下 -->
+    <div class="watermark-left">仅供学习使用 页面永久免费 AI回复未必准确 请勿全然相信</div>
+    <!-- 水印：右下 -->
+    <div class="watermark-right">张文亮</div>
     <div class="login-wrapper">
       <!-- 左侧：品牌 & 特性 -->
       <div class="login-left">
@@ -359,6 +363,33 @@ async function handleLogin() {
 .form-footer a:hover { color: var(--accent-hover); }
 
 /* 响应式 */
+/* 水印 */
+.watermark-left,
+.watermark-right {
+  position: fixed;
+  bottom: 20px;
+  font-family: var(--font-hand);
+  font-size: 14px;
+  color: rgba(45, 45, 45, 0.45);
+  pointer-events: none;
+  user-select: none;
+  z-index: 999;
+  letter-spacing: 0.5px;
+  transform: rotate(-3deg);
+}
+.watermark-left {
+  left: 24px;
+  text-align: left;
+}
+.watermark-right {
+  right: 24px;
+  text-align: right;
+  font-family: var(--font-marker);
+  font-size: 18px;
+  color: rgba(45, 45, 45, 0.35);
+  transform: rotate(2deg);
+}
+
 @media (max-width: 960px) {
   .login-wrapper { flex-direction: column; gap: 40px; }
   .login-left { text-align: center; }

@@ -102,6 +102,8 @@ public class RagStep implements ChatChainStep {
         for (RagChunk chunk : vectorResults) merged.put(chunk.getId(), chunk);
         for (RagChunk chunk : keywordResults) merged.putIfAbsent(chunk.getId(), chunk);
         List<RagChunk> relatedChunks = new ArrayList<>(merged.values());
+        log.info("[RAG-Hybrid] 向量检索: {} 条，关键字检索: {} 条，合并去重后: {} 条（keywordEnabled={}）",
+                vectorResults.size(), keywordResults.size(), relatedChunks.size(), ragKeywordEnabled);
 
         String ragContext = "";
         if (!relatedChunks.isEmpty()) {

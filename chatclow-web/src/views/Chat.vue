@@ -6,6 +6,7 @@
         <div class="logo">
           <el-icon :size="24"><ChatDotRound /></el-icon>
           <h2>ChatClow</h2>
+          <span class="logo-watermark">张文亮张文亮张文亮张文亮张文亮张文亮张文亮张文亮张文亮</span>
         </div>
         <el-button type="primary" size="small" @click="newConversation" :icon="Plus" circle />
       </div>
@@ -114,7 +115,10 @@
                 <span class="announcement-popup-title">{{ announcementData.title || '系统公告' }}</span>
                 <el-button :icon="Close" size="small" text @click="announcementVisible = false" />
               </div>
-              <div class="announcement-popup-content">{{ announcementData.content || '暂无公告内容' }}</div>
+              <div class="announcement-popup-content">
+                <div class="announcement-watermark" data-text="张文亮张文亮张文亮张文亮张文亮张文亮张文亮张文亮张文亮张文亮张文亮张文亮张文亮张文亮张文亮张文亮张文亮张文亮张文亮张文亮张文亮张文亮张文亮张文亮"></div>
+                {{ announcementData.content || '暂无公告内容' }}
+              </div>
             </div>
           </transition>
         </div>
@@ -1426,11 +1430,29 @@ onMounted(async () => {
   color: #fff;
   line-height: 1;
 }
+.logo {
+  overflow: hidden;
+}
 .logo h2 {
   font-family: var(--font-marker);
   font-size: 20px;
   color: var(--fg-default);
   margin: 0;
+  flex-shrink: 0;
+}
+.logo-watermark {
+  font-family: var(--font-marker);
+  font-size: 14px;
+  color: rgba(45, 45, 45, 0.25);
+  white-space: nowrap;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: clip;
+  pointer-events: none;
+  user-select: none;
+  letter-spacing: 4px;
+  line-height: 1;
+  transform: rotate(-2deg);
 }
 
 /* ===== 智能体卡片 ===== */
@@ -1834,6 +1856,26 @@ onMounted(async () => {
   overflow-y: auto;
   white-space: pre-wrap;
   word-break: break-word;
+  position: relative;
+}
+.announcement-watermark {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  user-select: none;
+  overflow: hidden;
+  font-size: 14px;
+  color: rgba(45, 45, 45, 0.15);
+  font-family: var(--font-marker);
+  line-height: 1.6;
+  letter-spacing: 4px;
+  transform: rotate(-5deg);
+}
+.announcement-watermark::before {
+  content: attr(data-text);
+  display: block;
+  word-break: break-all;
+  padding: 4px;
 }
 
 /* ===== 使用帮助卡片（五彩闪烁） ===== */

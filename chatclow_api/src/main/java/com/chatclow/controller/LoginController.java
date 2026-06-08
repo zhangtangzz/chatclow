@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
+import javax.servlet.http.HttpServletRequest;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -79,6 +80,28 @@ public class LoginController{
         data.put("token", newToken);
         data.put("refreshToken", newRefreshToken);
         return R.ok("刷新成功", data);
+    }
+
+    /**
+     * 验证 Token 是否有效
+     * GET /api/auth/verify
+     * 前端页面加载时调用，判断当前 token 是否还能用
+     */
+    @GetMapping("/verify")
+    public R<Map<String, Object>> verify(HttpServletRequest request) {
+        Long userId = (Long) request.getAttribute("userId");
+        if (userId == null) {
+            return R.error(401, "未登录");
+        }
+        User user = userService.getById(userId);
+        if (user == null) {
+            return R.error(401, "用户不存在");
+        }
+        Map<String, Object> data = new HashMap<>();
+        data.put("userId", user.getId());
+        data.put("username", user.getUsername());
+        data.put("role", user.getRole());
+        return R.ok(data);
     }
 }
 

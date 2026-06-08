@@ -1,11 +1,14 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { verify } from '../api/auth'
 
 export const useUserStore = defineStore('user', () => {
+  // 只从 localStorage 恢复 token，用户信息统一走服务器验证
   const token = ref(localStorage.getItem('token') || '')
-  const userId = ref(Number(localStorage.getItem('userId')) || 0)
-  const username = ref(localStorage.getItem('username') || '')
-  const role = ref(Number(localStorage.getItem('role')) || 1)
+  const userId = ref(0)
+  const username = ref('')
+  const role = ref(1)
+  const isVerified = ref(false)
 
   function setUser(data) {
     token.value = data.token
@@ -14,9 +17,34 @@ export const useUserStore = defineStore('user', () => {
     role.value = data.role || 1
     localStorage.setItem('token', data.token)
     localStorage.setItem('refreshToken', data.refreshToken || '')
-    localStorage.setItem('userId', data.userId)
-    localStorage.setItem('username', data.username)
-    localStorage.setItem('role', data.role || 1)
+    // 不再存 userId/username/role 到 localStorage
+  }
+
+  /**
+   * 页面加载时验证 token 是否有效
+   * 有效 → 从服务器获取用户信息
+   * 无效 → 清除 token，跳到登录页
+   */
+  async function fetchUserInfo() {
+    if (!token.value) {
+      isVerified.value = true
+      return false
+    }
+    try {
+      const res = await verify()
+      if (res.code === 200) {
+        userId.value = res.data.userId
+        username.value = res.data.username
+        role.value = res.data.role || 1
+        isVerified.value = true
+        return true
+      }
+    } catch {
+      // token 无效，清除
+    }
+    logout()
+    isVerified.value = true
+    return false
   }
 
   function logout() {
@@ -26,10 +54,7 @@ export const useUserStore = defineStore('user', () => {
     role.value = 1
     localStorage.removeItem('token')
     localStorage.removeItem('refreshToken')
-    localStorage.removeItem('userId')
-    localStorage.removeItem('username')
-    localStorage.removeItem('role')
   }
 
-  return { token, userId, username, role, setUser, logout }
+  return { token, userId, username, role, isVerified, setUser, fetchUserInfo, logout }
 })

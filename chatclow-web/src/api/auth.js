@@ -12,7 +12,10 @@ export function register(username, password, email) {
   return request.post('/user/register', { username, password, email })
 }
 
-// 刷新 Token
+// 验证 Token 是否有效（页面加载时调用）
+export function verify() {
+  return request.get('/auth/verify')
+}
 export function refreshToken(refreshToken) {
   return request.post('/auth/refresh', null, { params: { refreshToken } })
 }

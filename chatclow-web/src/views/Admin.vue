@@ -2,7 +2,10 @@
   <div class="admin-layout">
     <!-- 左侧菜单 -->
     <div class="admin-sidebar">
-      <div class="sidebar-title">ChatClow 管理后台</div>
+      <div class="sidebar-title">
+        ChatClow 管理后台
+        <span class="sidebar-watermark">张文亮张文亮张文亮张文亮张文亮张文亮张文亮张文亮</span>
+      </div>
       <div class="sidebar-menu-cards">
         <div
             v-for="item in menu"
@@ -687,6 +690,11 @@ const userForm = ref({ username: '', password: '', email: '', role: 1 })
 const kbForm = ref({ name: '', description: '', storeInstanceId: 1 })
 const agentForm = ref({ name: '', description: '', systemPrompt: '', modelId: 1, status: 1, kbEnabled: 0, kbId: null })
 
+// 非管理员强制跳转
+if (userStore.role !== 2) {
+  router.replace('/')
+}
+
 // 大模型管理
 const modelList = ref([])
 const modelSearch = ref('')
@@ -1323,6 +1331,19 @@ onMounted(() => {
   padding: 0 4px 16px;
   border-bottom: 3px solid var(--border-color);
   margin-bottom: 12px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.sidebar-watermark {
+  font-family: var(--font-marker);
+  font-size: 12px;
+  color: rgba(45, 45, 45, 0.22);
+  margin-left: 8px;
+  letter-spacing: 3px;
+  pointer-events: none;
+  user-select: none;
+  display: inline-block;
+  transform: rotate(-2deg);
 }
 .sidebar-menu-cards {
   display: flex;
